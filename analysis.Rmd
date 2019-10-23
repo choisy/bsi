@@ -1,0 +1,283 @@
+---
+title: "Blood stream infections"
+csl: the-american-naturalist.csl
+output:
+  html_document:
+    theme: cerulean
+    toc: yes
+  pdf_document:
+    toc: yes
+<!-- bibliography: references.bib -->
+editor_options: 
+  chunk_output_type: console
+---
+
+<!--
+IMAGES:
+Insert them with: ![alt text](image.png)
+You can also resize them if needed: convert image.png -resize 50% image.png
+If you want to center the image, go through HTML code:
+<div style="text-align:center"><img src ="image.png"/></div>
+
+REFERENCES:
+For references: Put all the bibTeX references in the file "references.bib"
+in the current folder and cite the references as @key or [@key] in the text.
+Uncomment the bibliography field in the above header and put a "References"
+title wherever you want to display the reference list.
+-->
+
+<style type="text/css">
+.main-container {
+  max-width: 1370px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r general options, include = FALSE}
+knitr::knit_hooks$set(
+  margin = function(before, options, envir) {
+    if (before) par(mgp = c(1.5, .5, 0), bty = "n", plt = c(.105, .97, .13, .97))
+    else NULL
+  },
+  prompt = function(before, options, envir) {
+    options(prompt = if (options$engine %in% c("sh", "bash")) "$ " else "> ")
+  })
+
+knitr::opts_chunk$set(margin = TRUE, prompt = TRUE, comment = "",
+                      collapse = TRUE, cache = FALSE, autodep = TRUE,
+                      dev.args = list(pointsize = 11), fig.height = 3.5,
+                      fig.width = 4.24725, fig.retina = 2, fig.align = "center")
+
+options(width = 137)
+```
+
+## Packages
+
+Installing the required packages:
+
+```{r}
+required <- c("dplyr", "magrittr", "purrr", "readxl", "tibble", "tidyr")
+to_install <- setdiff(required, row.names(installed.packages()))
+if (length(to_install)) install.packages(to_install)
+```
+
+Loading `magrittr` for interactive use:
+
+```{r}
+library(magrittr)
+```
+
+## Reading data
+
+The data are in this file:
+
+```{r}
+data_file <- "19-8-2019-CTU16HN_Data.xls.xlsx"
+```
+
+The list of sheets that we are interested in:
+
+```{r}
+sheets <- c("ADM", "AIR", "APAC", "DAILY1n2", "ENR", "FINISH", "FU", "FU_DAY90", "MICBLD")
+```
+
+Reading all the sheets of this file:
+
+```{r warning = FALSE}
+data <- sheets %>%
+  lapply(readxl::read_excel, path = data_file) %>% 
+  setNames(sheets)
+```
+
+Note that some of these data sets have one row per patient whereas other data
+sets have more than one row per patient:
+
+```{r}
+(nbrow <- sapply(data, function(x) length(unique(table(x$PatientNo)))))
+```
+
+```{r}
+sapply(data, nrow)
+```
+
+Reading the dictionary of variables and levels:
+
+```{r}
+dictionary <- readxl::read_excel("Copy of CTU16HN_DataDictionary.xlsx", "Category")
+```
+
+## Accessory functions
+
+```{r}
+fill_gaps <- function(x) {
+  require(magrittr)
+  as.integer(x) %>%         # because easier to deal with 1-character encoding
+    paste(collapse = "") %>% 
+    gsub("101", "111", .)
+}
+```
+
+```{r}
+episodes <- function(x) {
+  require(magrittr)
+  x %<>% 
+    strsplit("") %>% 
+    unlist() %>% 
+    as.integer() %>% 
+    rle()
+  sel <- which(x$values > 0)
+  x$values[sel] <- seq_along(sel)
+  inverse.rle(x)
+}
+```
+
+This function uses `fill_gaps()` and `episodes()` to compute the `episode`
+variable for a given patient:
+
+```{r}
+compute_episode <- function(x) {
+  require(magrittr)
+  x %$% 
+    dplyr::full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1), b = 1),
+                     data.frame(HAIDate = sort(unique(HAIDate)), c = 2), "HAIDate") %>%
+    assign("tmp1", ., 1) %>% 
+    dplyr::mutate(d = !is.na(c)) %>% 
+    purrr::pluck("d") %>% 
+    fill_gaps() %>% 
+    episodes() %>% 
+    cbind(tmp1, episode = .) %>%
+    dplyr::left_join(x, ., "HAIDate") %>% 
+    dplyr::select(id, episode)
+}
+```
+
+## Defining populations / groups
+
+Adding the `episode` variable to `data$MICBLD`:
+
+```{r}
+data$MICBLD %<>% 
+  dplyr::mutate(id      = dplyr::row_number(),
+                HAIDate = as.Date(HAIDate)) %>% 
+  assign("tmp2", ., 1) %>% 
+  dplyr::filter(OrganismsNo > 0) %>% 
+  dplyr::select(id, PatientNo, HAIDate) %>% 
+  split(.$PatientNo) %>% 
+  lapply(compute_episode) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::left_join(tmp2, ., "id") %>% 
+  dplyr::select(-id)
+```
+
+We can see that no patient has more than 2 BSI episodes:
+
+```{r}
+table(data$MICBLD$episode)
+```
+
+Defining blood collection date of first episode:
+
+```{r}
+first_episodes <- data$MICBLD %>% 
+  dplyr::filter(episode < 2) %>%
+  dplyr::group_by(PatientNo) %>% 
+  dplyr::summarise(blood_collection = min(HAIDate))
+```
+
+Converting the `VSDate` variable of `data$DAILY1n2`:
+
+```{r}
+data$DAILY1n2 %<>% dplyr::mutate(VSDate = as.Date(VSDate))
+```
+
+Defining variables:
+
+```{r}
+data2 <- data$FINISH %>%
+  
+# exclude patients not completed and not agreed --------------------------------
+  dplyr::filter(!(IsCompleted == 2 & IsAgree != "Yes")) %>% 
+  
+# define HABSI variable --------------------------------------------------------
+  dplyr::left_join(dplyr::select(data$ADM, PatientNo, HospitalDate), "PatientNo") %>%
+  dplyr::mutate(habsi = tidyr::replace_na(HosDate - HospitalDate > 1, FALSE)) %>% # replace NA with FALSE
+  
+# define BSI variable ----------------------------------------------------------
+  dplyr::left_join(dplyr::filter(data$MICBLD, OrganismsNo > 0) %>% 
+                     purrr::pluck("PatientNo") %>% 
+                     unique() %>% 
+                     tibble::tibble(PatientNo = ., bsi = TRUE), "PatientNo") %>% 
+  dplyr::mutate(bsi = tidyr::replace_na(bsi, FALSE)) %>%  # replace NA with FALSE
+  
+# define patients at risk of CLBSI ---------------------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount > 0) %>% 
+                     dplyr::group_by(PatientNo) %>% 
+                     dplyr::summarise(clbsi_risk = any(diff(VSDate) < 2)), "PatientNo") %>% 
+  dplyr::mutate(clbsi_risk = tidyr::replace_na(clbsi_risk, FALSE)) %>%  # replace NA with FALSE
+  
+# define CLBSI -----------------------------------------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount > 0) %>% 
+                     dplyr::left_join(first_episodes, "PatientNo") %>% # same as for AL BSI
+                     dplyr::filter(blood_collection - VSDate < 6) %>%  # same as for AL BSI
+                     dplyr::group_by(PatientNo) %>%                    # same as for AL BSI
+                     dplyr::summarise(clbsi = any(diff(VSDate) < 2)), "PatientNo") %>% 
+  dplyr::mutate(clbsi = tidyr::replace_na(clbsi, FALSE)) %>%  # replace NA with FALSE
+  
+# define patients at risk of arterial line BSI ---------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == "Yes") %>% 
+                     dplyr::group_by(PatientNo) %>% 
+                     dplyr::summarise(al_bsi_risk = any(diff(VSDate) < 2)), "PatientNo") %>% 
+  dplyr::mutate(al_bsi_risk = tidyr::replace_na(al_bsi_risk, FALSE)) %>%  # replace NA with FALSE
+  
+# define patients with arterial line BSI ---------------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == "Yes") %>% 
+                     dplyr::left_join(first_episodes, "PatientNo") %>% # same as for CLBSI
+                     dplyr::filter(blood_collection - VSDate < 6) %>%  # same as for CLBSI
+                     dplyr::group_by(PatientNo) %>%                    # same as for CLBSI
+                     dplyr::summarise(al_bsi = any(diff(VSDate) < 2)), "PatientNo") %>% 
+  dplyr::mutate(al_bsi = tidyr::replace_na(al_bsi, FALSE)) %>%  # replace NA with FALSE
+
+# define hospital --------------------------------------------------------------
+  dplyr::mutate(hospital = dplyr::recode(sub("-.*$", "", PatientNo),
+                                         `003` = "HTD",
+                                         `020` = "NHTD",
+                                         `103` = "BVTV"))
+```
+
+## Table 1: demographics
+
+### Hospital type
+
+```{r eval = FALSE}
+v <- "habsi"
+data2 %>% 
+  mutate(habsi = ! habsi) %>% 
+  group_by(hospital, habsi) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  mutate(habsi = recode(as.character(habsi), `FALSE` = "with HABSI", `TRUE` = "without HABSI")) %>% 
+  tidyr::pivot_wider(names_from = habsi, values_from = n)
+```
+
+```{r eval = FALSE}
+v <- "habsi"
+data2 %>% 
+  mutate(x = {{ rlang::quo_name(v) }} ) %>%
+  group_by(hospital, x) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  mutate(x = recode(as.character(x), `FALSE` = paste("with", toupper(v)), `TRUE` = paste("without", toupper(v)))) %>% 
+  tidyr::pivot_wider(names_from = x, values_from = n)
+```
+
+```{r eval = FALSE}
+data2 %>% 
+  mutate(habsi = ! habsi) %>% 
+  group_by(hospital, habsi) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  mutate(habsi = recode(as.character(habsi), `FALSE` = "with HABSI", `TRUE` = "without HABSI")) %>% 
+  tidyr::pivot_wider(names_from = habsi, values_from = n)
+```
+
