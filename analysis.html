@@ -372,9 +372,7 @@ summary {
 <li><a href="#reading-data">Reading data</a></li>
 <li><a href="#accessory-functions">Accessory functions</a></li>
 <li><a href="#defining-populations-groups">Defining populations / groups</a></li>
-<li><a href="#table-1-demographics">Table 1: demographics</a><ul>
-<li><a href="#hospital-type">Hospital type</a></li>
-</ul></li>
+<li><a href="#table-1-demographics">Table 1: demographics</a></li>
 </ul>
 </div>
 
@@ -390,7 +388,7 @@ For references: Put all the bibTeX references in the file "references.bib"
 in the current folder and cite the references as @key or [@key] in the text.
 Uncomment the bibliography field in the above header and put a "References"
 title wherever you want to display the reference list.
--->
+
 <style type="text/css">
 .main-container {
   max-width: 1370px;
@@ -398,175 +396,365 @@ title wherever you want to display the reference list.
   margin-right: auto;
 }
 </style>
+-->
+<style type="text/css">
+pre, code {white-space:pre !important; overflow-x:scroll !important}
+
+html { overflow-x: scroll; }
+</style>
 <div id="packages" class="section level2">
 <h2>Packages</h2>
 <p>Installing the required packages:</p>
-<pre class="r"><code>&gt; required &lt;- c(&quot;dplyr&quot;, &quot;magrittr&quot;, &quot;purrr&quot;, &quot;readxl&quot;, &quot;tibble&quot;, &quot;tidyr&quot;)
-&gt; to_install &lt;- setdiff(required, row.names(installed.packages()))
-&gt; if (length(to_install)) install.packages(to_install)</code></pre>
+<pre class="r"><code>required &lt;- c(&quot;dplyr&quot;, &quot;lubridate&quot;, &quot;magrittr&quot;, &quot;purrr&quot;, &quot;readxl&quot;, &quot;tibble&quot;, &quot;tidyr&quot;)
+to_install &lt;- setdiff(required, row.names(installed.packages()))
+if (length(to_install)) install.packages(to_install)</code></pre>
 <p>Loading <code>magrittr</code> for interactive use:</p>
-<pre class="r"><code>&gt; library(magrittr)</code></pre>
+<pre class="r"><code>library(magrittr)</code></pre>
 </div>
 <div id="reading-data" class="section level2">
 <h2>Reading data</h2>
 <p>The data are in this file:</p>
-<pre class="r"><code>&gt; data_file &lt;- &quot;19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
+<pre class="r"><code>data_file &lt;- &quot;19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
 <p>The list of sheets that we are interested in:</p>
-<pre class="r"><code>&gt; sheets &lt;- c(&quot;ADM&quot;, &quot;AIR&quot;, &quot;APAC&quot;, &quot;DAILY1n2&quot;, &quot;ENR&quot;, &quot;FINISH&quot;, &quot;FU&quot;, &quot;FU_DAY90&quot;, &quot;MICBLD&quot;)</code></pre>
+<pre class="r"><code>sheets &lt;- c(&quot;ADM&quot;, &quot;AIR&quot;, &quot;APAC&quot;, &quot;DAILY1n2&quot;, &quot;ENR&quot;, &quot;FINISH&quot;, &quot;FU&quot;, &quot;FU_DAY90&quot;, &quot;MICBLD&quot;)</code></pre>
 <p>Reading all the sheets of this file:</p>
-<pre class="r"><code>&gt; data &lt;- sheets %&gt;%
-+   lapply(readxl::read_excel, path = data_file) %&gt;% 
-+   setNames(sheets)</code></pre>
+<pre class="r"><code>data &lt;- sheets %&gt;%
+  lapply(readxl::read_excel, path = data_file) %&gt;% 
+  setNames(sheets)</code></pre>
 <p>Note that some of these data sets have one row per patient whereas other data sets have more than one row per patient:</p>
-<pre class="r"><code>&gt; (nbrow &lt;- sapply(data, function(x) length(unique(table(x$PatientNo)))))
-     ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
-       1        1        1       72        1        1        1        1        7 </code></pre>
-<pre class="r"><code>&gt; sapply(data, nrow)
-     ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
-     597      597      597    11461      597      597      579      405      312 </code></pre>
+<pre class="r"><code>(nbrow &lt;- sapply(data, function(x) length(unique(table(x$PatientNo)))))</code></pre>
+<pre><code>##      ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
+##        1        1        1       72        1        1        1        1        7</code></pre>
+<pre class="r"><code>sapply(data, nrow)</code></pre>
+<pre><code>##      ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
+##      597      597      597    11461      597      597      579      405      312</code></pre>
 <p>Reading the dictionary of variables and levels:</p>
-<pre class="r"><code>&gt; dictionary &lt;- readxl::read_excel(&quot;Copy of CTU16HN_DataDictionary.xlsx&quot;, &quot;Category&quot;)</code></pre>
+<pre class="r"><code>dictionary &lt;- readxl::read_excel(&quot;Copy of CTU16HN_DataDictionary.xlsx&quot;, &quot;Category&quot;)</code></pre>
 </div>
 <div id="accessory-functions" class="section level2">
 <h2>Accessory functions</h2>
-<pre class="r"><code>&gt; fill_gaps &lt;- function(x) {
-+   require(magrittr)
-+   as.integer(x) %&gt;%         # because easier to deal with 1-character encoding
-+     paste(collapse = &quot;&quot;) %&gt;% 
-+     gsub(&quot;101&quot;, &quot;111&quot;, .)
-+ }</code></pre>
-<pre class="r"><code>&gt; episodes &lt;- function(x) {
-+   require(magrittr)
-+   x %&lt;&gt;% 
-+     strsplit(&quot;&quot;) %&gt;% 
-+     unlist() %&gt;% 
-+     as.integer() %&gt;% 
-+     rle()
-+   sel &lt;- which(x$values &gt; 0)
-+   x$values[sel] &lt;- seq_along(sel)
-+   inverse.rle(x)
-+ }</code></pre>
+<pre class="r"><code>fill_gaps &lt;- function(x) {
+  require(magrittr)
+  as.integer(x) %&gt;%         # because easier to deal with 1-character encoding
+    paste(collapse = &quot;&quot;) %&gt;% 
+    gsub(&quot;101&quot;, &quot;111&quot;, .)
+}</code></pre>
+<pre class="r"><code>episodes &lt;- function(x) {
+  require(magrittr)
+  x %&lt;&gt;% 
+    strsplit(&quot;&quot;) %&gt;% 
+    unlist() %&gt;% 
+    as.integer() %&gt;% 
+    rle()
+  sel &lt;- which(x$values &gt; 0)
+  x$values[sel] &lt;- seq_along(sel)
+  inverse.rle(x)
+}</code></pre>
 <p>This function uses <code>fill_gaps()</code> and <code>episodes()</code> to compute the <code>episode</code> variable for a given patient:</p>
-<pre class="r"><code>&gt; compute_episode &lt;- function(x) {
-+   require(magrittr)
-+   x %$% 
-+     dplyr::full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1), b = 1),
-+                      data.frame(HAIDate = sort(unique(HAIDate)), c = 2), &quot;HAIDate&quot;) %&gt;%
-+     assign(&quot;tmp1&quot;, ., 1) %&gt;% 
-+     dplyr::mutate(d = !is.na(c)) %&gt;% 
-+     purrr::pluck(&quot;d&quot;) %&gt;% 
-+     fill_gaps() %&gt;% 
-+     episodes() %&gt;% 
-+     cbind(tmp1, episode = .) %&gt;%
-+     dplyr::left_join(x, ., &quot;HAIDate&quot;) %&gt;% 
-+     dplyr::select(id, episode)
-+ }</code></pre>
+<pre class="r"><code>compute_episode &lt;- function(x) {
+  require(magrittr)
+  x %$% 
+    dplyr::full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1), b = 1),
+                     data.frame(HAIDate = sort(unique(HAIDate)), c = 2), &quot;HAIDate&quot;) %&gt;%
+    assign(&quot;tmp1&quot;, ., 1) %&gt;% 
+    dplyr::mutate(d = !is.na(c)) %&gt;% 
+    purrr::pluck(&quot;d&quot;) %&gt;% 
+    fill_gaps() %&gt;% 
+    episodes() %&gt;% 
+    cbind(tmp1, episode = .) %&gt;%
+    dplyr::left_join(x, ., &quot;HAIDate&quot;) %&gt;% 
+    dplyr::select(id, episode)
+}</code></pre>
 </div>
 <div id="defining-populations-groups" class="section level2">
 <h2>Defining populations / groups</h2>
 <p>Adding the <code>episode</code> variable to <code>data$MICBLD</code>:</p>
-<pre class="r"><code>&gt; data$MICBLD %&lt;&gt;% 
-+   dplyr::mutate(id      = dplyr::row_number(),
-+                 HAIDate = as.Date(HAIDate)) %&gt;% 
-+   assign(&quot;tmp2&quot;, ., 1) %&gt;% 
-+   dplyr::filter(OrganismsNo &gt; 0) %&gt;% 
-+   dplyr::select(id, PatientNo, HAIDate) %&gt;% 
-+   split(.$PatientNo) %&gt;% 
-+   lapply(compute_episode) %&gt;% 
-+   dplyr::bind_rows() %&gt;% 
-+   dplyr::left_join(tmp2, ., &quot;id&quot;) %&gt;% 
-+   dplyr::select(-id)</code></pre>
+<pre class="r"><code>data$MICBLD %&lt;&gt;% 
+  dplyr::mutate(id      = dplyr::row_number(),
+                HAIDate = as.Date(HAIDate)) %&gt;% 
+  assign(&quot;tmp2&quot;, ., 1) %&gt;% 
+  dplyr::filter(OrganismsNo &gt; 0) %&gt;% 
+  dplyr::select(id, PatientNo, HAIDate) %&gt;% 
+  split(.$PatientNo) %&gt;% 
+  lapply(compute_episode) %&gt;% 
+  dplyr::bind_rows() %&gt;% 
+  dplyr::left_join(tmp2, ., &quot;id&quot;) %&gt;% 
+  dplyr::select(-id)</code></pre>
 <p>We can see that no patient has more than 2 BSI episodes:</p>
-<pre class="r"><code>&gt; table(data$MICBLD$episode)
-
- 1  2 
-48  7 </code></pre>
+<pre class="r"><code>table(data$MICBLD$episode)</code></pre>
+<pre><code>## 
+##  1  2 
+## 48  7</code></pre>
 <p>Defining blood collection date of first episode:</p>
-<pre class="r"><code>&gt; first_episodes &lt;- data$MICBLD %&gt;% 
-+   dplyr::filter(episode &lt; 2) %&gt;%
-+   dplyr::group_by(PatientNo) %&gt;% 
-+   dplyr::summarise(blood_collection = min(HAIDate))</code></pre>
+<pre class="r"><code>first_episodes &lt;- data$MICBLD %&gt;% 
+  dplyr::filter(episode &lt; 2) %&gt;%
+  dplyr::group_by(PatientNo) %&gt;% 
+  dplyr::summarise(blood_collection = min(HAIDate))</code></pre>
 <p>Converting the <code>VSDate</code> variable of <code>data$DAILY1n2</code>:</p>
-<pre class="r"><code>&gt; data$DAILY1n2 %&lt;&gt;% dplyr::mutate(VSDate = as.Date(VSDate))</code></pre>
+<pre class="r"><code>data$DAILY1n2 %&lt;&gt;% dplyr::mutate(VSDate = as.Date(VSDate))</code></pre>
 <p>Defining variables:</p>
-<pre class="r"><code>&gt; data2 &lt;- data$FINISH %&gt;%
-+   
-+ # exclude patients not completed and not agreed --------------------------------
-+   dplyr::filter(!(IsCompleted == 2 &amp; IsAgree != &quot;Yes&quot;)) %&gt;% 
-+   
-+ # define HABSI variable --------------------------------------------------------
-+   dplyr::left_join(dplyr::select(data$ADM, PatientNo, HospitalDate), &quot;PatientNo&quot;) %&gt;%
-+   dplyr::mutate(habsi = tidyr::replace_na(HosDate - HospitalDate &gt; 1, FALSE)) %&gt;% # replace NA with FALSE
-+   
-+ # define BSI variable ----------------------------------------------------------
-+   dplyr::left_join(dplyr::filter(data$MICBLD, OrganismsNo &gt; 0) %&gt;% 
-+                      purrr::pluck(&quot;PatientNo&quot;) %&gt;% 
-+                      unique() %&gt;% 
-+                      tibble::tibble(PatientNo = ., bsi = TRUE), &quot;PatientNo&quot;) %&gt;% 
-+   dplyr::mutate(bsi = tidyr::replace_na(bsi, FALSE)) %&gt;%  # replace NA with FALSE
-+   
-+ # define patients at risk of CLBSI ---------------------------------------------
-+   dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% 
-+                      dplyr::group_by(PatientNo) %&gt;% 
-+                      dplyr::summarise(clbsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-+   dplyr::mutate(clbsi_risk = tidyr::replace_na(clbsi_risk, FALSE)) %&gt;%  # replace NA with FALSE
-+   
-+ # define CLBSI -----------------------------------------------------------------
-+   dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% 
-+                      dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for AL BSI
-+                      dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for AL BSI
-+                      dplyr::group_by(PatientNo) %&gt;%                    # same as for AL BSI
-+                      dplyr::summarise(clbsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-+   dplyr::mutate(clbsi = tidyr::replace_na(clbsi, FALSE)) %&gt;%  # replace NA with FALSE
-+   
-+ # define patients at risk of arterial line BSI ---------------------------------
-+   dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% 
-+                      dplyr::group_by(PatientNo) %&gt;% 
-+                      dplyr::summarise(al_bsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-+   dplyr::mutate(al_bsi_risk = tidyr::replace_na(al_bsi_risk, FALSE)) %&gt;%  # replace NA with FALSE
-+   
-+ # define patients with arterial line BSI ---------------------------------------
-+   dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% 
-+                      dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for CLBSI
-+                      dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for CLBSI
-+                      dplyr::group_by(PatientNo) %&gt;%                    # same as for CLBSI
-+                      dplyr::summarise(al_bsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-+   dplyr::mutate(al_bsi = tidyr::replace_na(al_bsi, FALSE)) %&gt;%  # replace NA with FALSE
-+ 
-+ # define hospital --------------------------------------------------------------
-+   dplyr::mutate(hospital = dplyr::recode(sub(&quot;-.*$&quot;, &quot;&quot;, PatientNo),
-+                                          `003` = &quot;HTD&quot;,
-+                                          `020` = &quot;NHTD&quot;,
-+                                          `103` = &quot;BVTV&quot;))</code></pre>
+<pre class="r"><code>data2 &lt;- data$FINISH %&gt;%
+  
+# exclude patients not completed and not agreed --------------------------------
+  dplyr::filter(!(IsCompleted == 2 &amp; IsAgree != &quot;Yes&quot;)) %&gt;% 
+  
+# define HABSI variable --------------------------------------------------------
+  dplyr::left_join(dplyr::select(data$ADM, PatientNo, HospitalDate), &quot;PatientNo&quot;) %&gt;%
+  dplyr::mutate(habsi = tidyr::replace_na(HosDate - HospitalDate &gt; 1, FALSE)) %&gt;% # replace NA with FALSE
+  
+# define BSI variable ----------------------------------------------------------
+  dplyr::left_join(dplyr::filter(data$MICBLD, OrganismsNo &gt; 0) %&gt;% 
+                     purrr::pluck(&quot;PatientNo&quot;) %&gt;% 
+                     unique() %&gt;% 
+                     tibble::tibble(PatientNo = ., bsi = TRUE), &quot;PatientNo&quot;) %&gt;% 
+  dplyr::mutate(bsi = tidyr::replace_na(bsi, FALSE)) %&gt;%  # replace NA with FALSE
+  
+# define patients at risk of CLBSI ---------------------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% 
+                     dplyr::group_by(PatientNo) %&gt;% 
+                     dplyr::summarise(clbsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
+  dplyr::mutate(clbsi_risk = tidyr::replace_na(clbsi_risk, FALSE)) %&gt;%  # replace NA with FALSE
+  
+# define CLBSI -----------------------------------------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% 
+                     dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for AL BSI
+                     dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for AL BSI
+                     dplyr::group_by(PatientNo) %&gt;%                    # same as for AL BSI
+                     dplyr::summarise(clbsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
+  dplyr::mutate(clbsi = tidyr::replace_na(clbsi, FALSE)) %&gt;%  # replace NA with FALSE
+  
+# define patients at risk of arterial line BSI ---------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% 
+                     dplyr::group_by(PatientNo) %&gt;% 
+                     dplyr::summarise(al_bsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
+  dplyr::mutate(al_bsi_risk = tidyr::replace_na(al_bsi_risk, FALSE)) %&gt;%  # replace NA with FALSE
+  
+# define patients with arterial line BSI ---------------------------------------
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% 
+                     dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for CLBSI
+                     dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for CLBSI
+                     dplyr::group_by(PatientNo) %&gt;%                    # same as for CLBSI
+                     dplyr::summarise(al_bsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
+  dplyr::mutate(al_bsi = tidyr::replace_na(al_bsi, FALSE)) %&gt;%  # replace NA with FALSE
+
+# adding other variables -------------------------------------------------------
+  dplyr::left_join(dplyr::select(data$ENR, PatientNo, Age, RandDate, YOB, Sex), &quot;PatientNo&quot;) %&gt;%
+  dplyr::left_join(dplyr::select(data$ADM, PatientNo, Source, NKQ), &quot;PatientNo&quot;) %&gt;%
+  dplyr::left_join(dplyr::select(data$AIR, PatientNo, IsTrach), &quot;PatientNo&quot;) %&gt;%
+
+  dplyr::mutate(
+# define hospitals -------------------------------------------------------------
+    hospital = dplyr::recode(sub(&quot;-.*$&quot;, &quot;&quot;, PatientNo),
+                             `003` = &quot;HTD&quot;,
+                             `020` = &quot;NHTD&quot;,
+                             `103` = &quot;BVTV&quot;),
+
+# any tracheostomy -------------------------------------------------------------
+    tracheo  = ifelse(NKQ &lt; 2 | IsTrach == &quot;Yes&quot;, &quot;tracheostomy&quot;, &quot;no tracheostomy&quot;),
+
+# define tracheostomy vs month -------------------------------------------------
+    nkq      = c(&quot;tracheostomy&quot;, &quot;mouth&quot;)[NKQ],
+
+# computing age ----------------------------------------------------------------
+    age      = ifelse(is.na(Age), round(as.numeric(as.Date(RandDate) - lubridate::ymd(paste(YOB, &quot;0101&quot;))) / 365), Age)) # maybe we should consider 1st of July instead?</code></pre>
 </div>
 <div id="table-1-demographics" class="section level2">
 <h2>Table 1: demographics</h2>
-<div id="hospital-type" class="section level3">
-<h3>Hospital type</h3>
-<pre class="r"><code>&gt; v &lt;- &quot;habsi&quot;
-&gt; data2 %&gt;% 
-+   mutate(habsi = ! habsi) %&gt;% 
-+   group_by(hospital, habsi) %&gt;% 
-+   tally() %&gt;% 
-+   ungroup() %&gt;% 
-+   mutate(habsi = recode(as.character(habsi), `FALSE` = &quot;with HABSI&quot;, `TRUE` = &quot;without HABSI&quot;)) %&gt;% 
-+   tidyr::pivot_wider(names_from = habsi, values_from = n)</code></pre>
-<pre class="r"><code>&gt; v &lt;- &quot;habsi&quot;
-&gt; data2 %&gt;% 
-+   mutate(x = {{ rlang::quo_name(v) }} ) %&gt;%
-+   group_by(hospital, x) %&gt;% 
-+   tally() %&gt;% 
-+   ungroup() %&gt;% 
-+   mutate(x = recode(as.character(x), `FALSE` = paste(&quot;with&quot;, toupper(v)), `TRUE` = paste(&quot;without&quot;, toupper(v)))) %&gt;% 
-+   tidyr::pivot_wider(names_from = x, values_from = n)</code></pre>
-<pre class="r"><code>&gt; data2 %&gt;% 
-+   mutate(habsi = ! habsi) %&gt;% 
-+   group_by(hospital, habsi) %&gt;% 
-+   tally() %&gt;% 
-+   ungroup() %&gt;% 
-+   mutate(habsi = recode(as.character(habsi), `FALSE` = &quot;with HABSI&quot;, `TRUE` = &quot;without HABSI&quot;)) %&gt;% 
-+   tidyr::pivot_wider(names_from = habsi, values_from = n)</code></pre>
-</div>
+<pre class="r"><code>f1 &lt;- function(v, g, data) {
+  require(magrittr)
+  data %&gt;% 
+    dplyr::mutate(x = ! .[[v]],
+                  y = .[[g]]) %&gt;%
+    dplyr::group_by(y, x) %&gt;% 
+    dplyr::tally() %&gt;% 
+    dplyr::ungroup() %&gt;% 
+    dplyr::mutate(x = dplyr::recode(as.character(x), `FALSE` = paste(&quot;with&quot;, toupper(v)), `TRUE` = paste(&quot;without&quot;, toupper(v)))) %&gt;% 
+    tidyr::pivot_wider(names_from = x, values_from = n)
+}</code></pre>
+<pre class="r"><code>f2 &lt;- function(v, g, data) {
+  require(magrittr)
+  iqr &lt;- function(x) {
+    tmp &lt;- quantile(x, c(.25, .5, .75))
+    paste0(tmp[2], &quot; (IQR: &quot;, tmp[1], &quot;-&quot;, tmp[3], &quot;)&quot;)
+  }
+  data2 %&gt;% 
+    dplyr::mutate(x = .[[v]],
+                  y = .[[g]]) %&gt;%
+    dplyr::group_by(x) %&gt;% 
+    dplyr::summarize(y = iqr(y)) %&gt;% 
+    dplyr::mutate(x = dplyr::recode(as.character(x), `FALSE` = paste(&quot;with&quot;, toupper(v)), `TRUE` = paste(&quot;without&quot;, toupper(v)))) %&gt;% 
+    tidyr::pivot_wider(names_from = x, values_from = y)
+}</code></pre>
+<pre class="r"><code>for(v in c(&quot;habsi&quot;, &quot;bsi&quot;, &quot;clbsi_risk&quot;, &quot;clbsi&quot;, &quot;al_bsi_risk&quot;, &quot;al_bsi&quot;)) {
+  for (g in c(&quot;hospital&quot;, &quot;Sex&quot;, &quot;Source&quot;, &quot;nkq&quot;, &quot;tracheo&quot;)) print(f1(v, g, data2))
+}</code></pre>
+<pre><code>## # A tibble: 3 x 3
+##   y     `with HABSI` `without HABSI`
+##   &lt;chr&gt;        &lt;int&gt;           &lt;int&gt;
+## 1 BVTV            61              74
+## 2 HTD            195             102
+## 3 NHTD             4             161
+## # A tibble: 2 x 3
+##   y      `with HABSI` `without HABSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 Female           81             103
+## 2 Male            179             234
+## # A tibble: 2 x 3
+##   y              `with HABSI` `without HABSI`
+##   &lt;chr&gt;                 &lt;int&gt;           &lt;int&gt;
+## 1 Community                77              94
+## 2 Other hospital          183             243
+## # A tibble: 2 x 3
+##   y            `with HABSI` `without HABSI`
+##   &lt;chr&gt;               &lt;int&gt;           &lt;int&gt;
+## 1 mouth                 140             304
+## 2 tracheostomy          120              33
+## # A tibble: 3 x 3
+##   y               `with HABSI` `without HABSI`
+##   &lt;chr&gt;                  &lt;int&gt;           &lt;int&gt;
+## 1 no tracheostomy          113             201
+## 2 tracheostomy             146             136
+## 3 &lt;NA&gt;                       1              NA
+## # A tibble: 3 x 3
+##   y     `with BSI` `without BSI`
+##   &lt;chr&gt;      &lt;int&gt;         &lt;int&gt;
+## 1 BVTV          10           125
+## 2 HTD           23           274
+## 3 NHTD          11           154
+## # A tibble: 2 x 3
+##   y      `with BSI` `without BSI`
+##   &lt;chr&gt;       &lt;int&gt;         &lt;int&gt;
+## 1 Female         10           174
+## 2 Male           34           379
+## # A tibble: 2 x 3
+##   y              `with BSI` `without BSI`
+##   &lt;chr&gt;               &lt;int&gt;         &lt;int&gt;
+## 1 Community              14           157
+## 2 Other hospital         30           396
+## # A tibble: 2 x 3
+##   y            `with BSI` `without BSI`
+##   &lt;chr&gt;             &lt;int&gt;         &lt;int&gt;
+## 1 mouth                25           419
+## 2 tracheostomy         19           134
+## # A tibble: 3 x 3
+##   y               `with BSI` `without BSI`
+##   &lt;chr&gt;                &lt;int&gt;         &lt;int&gt;
+## 1 no tracheostomy          8           306
+## 2 tracheostomy            36           246
+## 3 &lt;NA&gt;                    NA             1
+## # A tibble: 3 x 3
+##   y     `with CLBSI_RISK` `without CLBSI_RISK`
+##   &lt;chr&gt;             &lt;int&gt;                &lt;int&gt;
+## 1 BVTV                 68                   67
+## 2 HTD                 132                  165
+## 3 NHTD                121                   44
+## # A tibble: 2 x 3
+##   y      `with CLBSI_RISK` `without CLBSI_RISK`
+##   &lt;chr&gt;              &lt;int&gt;                &lt;int&gt;
+## 1 Female               107                   77
+## 2 Male                 214                  199
+## # A tibble: 2 x 3
+##   y              `with CLBSI_RISK` `without CLBSI_RISK`
+##   &lt;chr&gt;                      &lt;int&gt;                &lt;int&gt;
+## 1 Community                     91                   80
+## 2 Other hospital               230                  196
+## # A tibble: 2 x 3
+##   y            `with CLBSI_RISK` `without CLBSI_RISK`
+##   &lt;chr&gt;                    &lt;int&gt;                &lt;int&gt;
+## 1 mouth                      253                  191
+## 2 tracheostomy                68                   85
+## # A tibble: 3 x 3
+##   y               `with CLBSI_RISK` `without CLBSI_RISK`
+##   &lt;chr&gt;                       &lt;int&gt;                &lt;int&gt;
+## 1 no tracheostomy               168                  146
+## 2 tracheostomy                  152                  130
+## 3 &lt;NA&gt;                            1                   NA
+## # A tibble: 3 x 3
+##   y     `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;        &lt;int&gt;           &lt;int&gt;
+## 1 BVTV             9             126
+## 2 HTD             13             284
+## 3 NHTD             9             156
+## # A tibble: 2 x 3
+##   y      `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 Female            8             176
+## 2 Male             23             390
+## # A tibble: 2 x 3
+##   y              `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;                 &lt;int&gt;           &lt;int&gt;
+## 1 Community                11             160
+## 2 Other hospital           20             406
+## # A tibble: 2 x 3
+##   y            `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;               &lt;int&gt;           &lt;int&gt;
+## 1 mouth                  21             423
+## 2 tracheostomy           10             143
+## # A tibble: 3 x 3
+##   y               `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;                  &lt;int&gt;           &lt;int&gt;
+## 1 no tracheostomy            8             306
+## 2 tracheostomy              23             259
+## 3 &lt;NA&gt;                      NA               1
+## # A tibble: 3 x 3
+##   y     `with AL_BSI_RISK` `without AL_BSI_RISK`
+##   &lt;chr&gt;              &lt;int&gt;                 &lt;int&gt;
+## 1 BVTV                   1                   134
+## 2 HTD                  130                   167
+## 3 NHTD                  24                   141
+## # A tibble: 2 x 3
+##   y      `with AL_BSI_RISK` `without AL_BSI_RISK`
+##   &lt;chr&gt;               &lt;int&gt;                 &lt;int&gt;
+## 1 Female                 43                   141
+## 2 Male                  112                   301
+## # A tibble: 2 x 3
+##   y              `with AL_BSI_RISK` `without AL_BSI_RISK`
+##   &lt;chr&gt;                       &lt;int&gt;                 &lt;int&gt;
+## 1 Community                      36                   135
+## 2 Other hospital                119                   307
+## # A tibble: 2 x 3
+##   y            `with AL_BSI_RISK` `without AL_BSI_RISK`
+##   &lt;chr&gt;                     &lt;int&gt;                 &lt;int&gt;
+## 1 mouth                        87                   357
+## 2 tracheostomy                 68                    85
+## # A tibble: 3 x 3
+##   y               `with AL_BSI_RISK` `without AL_BSI_RISK`
+##   &lt;chr&gt;                        &lt;int&gt;                 &lt;int&gt;
+## 1 no tracheostomy                 57                   257
+## 2 tracheostomy                    98                   184
+## 3 &lt;NA&gt;                            NA                     1
+## # A tibble: 3 x 3
+##   y     `without AL_BSI` `with AL_BSI`
+##   &lt;chr&gt;            &lt;int&gt;         &lt;int&gt;
+## 1 BVTV               135            NA
+## 2 HTD                280            17
+## 3 NHTD               161             4
+## # A tibble: 2 x 3
+##   y      `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;          &lt;int&gt;            &lt;int&gt;
+## 1 Female             3              181
+## 2 Male              18              395
+## # A tibble: 2 x 3
+##   y              `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;                  &lt;int&gt;            &lt;int&gt;
+## 1 Community                  5              166
+## 2 Other hospital            16              410
+## # A tibble: 2 x 3
+##   y            `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;                &lt;int&gt;            &lt;int&gt;
+## 1 mouth                    6              438
+## 2 tracheostomy            15              138
+## # A tibble: 3 x 3
+##   y               `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;                   &lt;int&gt;            &lt;int&gt;
+## 1 no tracheostomy             1              313
+## 2 tracheostomy               20              262
+## 3 &lt;NA&gt;                       NA                1</code></pre>
+<pre class="r"><code>f2(&quot;habsi&quot;, &quot;age&quot;, data2)</code></pre>
+<pre><code>## # A tibble: 1 x 2
+##   `with HABSI`    `without HABSI`
+##   &lt;chr&gt;           &lt;chr&gt;          
+## 1 59 (IQR: 42-71) 56 (IQR: 41-69)</code></pre>
 </div>
 
 
