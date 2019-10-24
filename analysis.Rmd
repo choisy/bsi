@@ -257,7 +257,8 @@ data2 <- data$FINISH %>%
                              `103` = "BVTV"),
 
 # any tracheostomy -------------------------------------------------------------
-    tracheo  = ifelse(NKQ < 2 | IsTrach == "Yes", "tracheostomy", "no tracheostomy"),
+#    tracheo  = ifelse(NKQ < 2 | IsTrach == "Yes", "tracheostomy", "no tracheostomy"),
+    tracheo  = NKQ < 2 | IsTrach == "Yes",
 
 # define tracheostomy vs month -------------------------------------------------
     nkq      = c("tracheostomy", "mouth")[NKQ],
@@ -300,16 +301,180 @@ f2 <- function(v, g, data) {
 ```
 
 ```{r}
+data3 <- data2 %>% 
+  dplyr::mutate(tracheo     = dplyr::recode(as.character(tracheo),
+                                            `TRUE`  = "tracheostomy",
+                                            `FALSE` = "no tracheostomy"),
+                clbsi_risk  = recode(as.character(clbsi_risk),
+                                     `TRUE` = "CV cath",
+                                     `FALSE` = "no CV cath"),
+                al_bsi_risk = recode(as.character(al_bsi_risk),
+                                    `TRUE` = "art cath",
+                                    `FALSE` = "no art cath"))
+```
+
+```{r}
 for(v in c("habsi", "bsi", "clbsi_risk", "clbsi", "al_bsi_risk", "al_bsi")) {
-  for (g in c("hospital", "Sex", "Source", "nkq", "tracheo")) print(f1(v, g, data2))
+  for (g in c("hospital", "Sex", "Source", "nkq", "tracheo", "clbsi_risk", "al_bsi_risk")) print(f1(v, g, data3))
 }
+```
+
+```{r}
+f1("habsi", "al_bsi_risk", data3)
 ```
 
 ```{r}
 f2("habsi", "age", data2)
 ```
 
+## APACHE-II Scoe
 
+The Apache-II Score provides an estimate of ICU mortality based on a number of
+laboratory values and patient signs taking both acute and chronic disease into
+account.
+
+**Note:** The data used should relate to the 24 hours prior to randomisation and
+the worst (highest scoring) recorded values should be used.
+
+This function below computes score functions:
+
+```{r}
+make_score_functions <- function(scores, values) {
+  function(x) scores[cut(x, c(-Inf, values, +Inf), right = FALSE)]
+}
+```
+
+The parameters values for the score functions:
+
+```{r}
+apache_physio <- list(
+  temp = list(
+    scores = c(4:0, 1, 3, 4),
+    values = c(30, 32, 34, 36, 38.5, 39, 41)),
+  bp = list(
+    scores = c(4, 2, 0, 2:4),
+    values = c(50, 70, 110, 130, 160)),
+  hr = list(
+    scores = c(4, 3, 2, 0, 2, 3, 4),
+    values = c(40, 55, 70, 110, 140, 180)),
+  rr = list(
+    scores = c(4, 2, 1, 0, 1, 3, 4),
+    values = c(6, 10, 25, 35, 50)),
+  pao2 = list(
+    scores = 4:0,
+    values = c(55, 61, 70)),
+  aa_gradient = list(
+    scores = 0:4,
+    values = c(200, 350, 500)),
+  ph = list(
+    scores = c(4, 3, 2, 0, 1, 3, 4),
+    values = c(7.15, 7.25, 7.33, 7.5, 7.6, 7.7)),
+  hco3 = list(
+    scores = c(4, 3, 2, 0, 1, 3, 4),
+    values = c(15, 18, 23, 32, 41, 52)),
+  na = list(
+    scores = c(4:2, 0:4),
+    values = c(111, 120, 130, 150, 155, 160, 180)),
+  k = list(
+    scores = c(4, 2:0, 1, 3, 4),
+    values = c(2.5, 3, 3.5, 5.5, 6, 7)),
+  creatinine = list(
+    scores = c(2, 0, 2:4),
+    values = c(0.6, 1.5, 2, 3.5)),
+  hematocrit = list(
+    scores = c(4, 2, 0:2, 4),
+    values = c(20, 30, 46, 50, 60)),
+  wbc = list(
+    scores = c(4, 2, 0:2, 4),
+    values = c(1, 3, 15, 20, 40)),
+  age = list(
+    scores = c(0, 2, 3, 5, 6),
+    values = c(45, 55, 65, 75)))
+```
+
+Let's generate the score functions:
+
+```{r}
+score_fcts <- setNames(lapply(apache_physio,
+                              function(x) make_score_functions(x$scores, x$values)), 
+                       names(apache_physio))
+```
+
+Let's add the last score function:
+
+```{r}
+score_fcts$gcs <- function(x) {
+  15 - x
+}
+```
+
+Let's see an example:
+
+```{r}
+score_fcts$temp(data$DAILY1n2$TempMax)
+```
+
+```{r}
+data$ADM %<>% 
+  mutate(Mode      = Mode      == "Yes",
+         CongIV    = CongIV    == "Yes",
+         Seve      = Seve      == "Yes",
+         AIDS      = AIDS      == "Yes",
+         Elective  = Elective  == "Yes",
+         Emergency = Emergency == "Yes")
+```
+
+```{r}
+data$ENR %<>% dplyr::mutate(RandDate = as.Date(RandDate))
+```
+
+
+```{r}
+data$APAC %>% 
+  dplyr::left_join(dplyr::select(data2, PatientNo, age), "PatientNo") %>% 
+  dplyr::left_join(dplyr::select(data$ENR, PatientNo, RandDate), "PatientNo") %>% 
+  dplyr::left_join(dplyr::select(data$ADM, PatientNo, Mode, CongIV, Seve, AIDS, Elective, Emergency), "PatientNo") %>% 
+  dplyr::left_join(dplyr::select(data$DAILY1n2, PatientNo, VSDate, TempMax, TempMin), c("PatientNo", "RandDate" = "VSDate")) %>% 
+  dplyr::mutate(a = score_fcts$temp(TempMax),
+                b = score_fcts$temp(TempMin),
+                temp_score = ifelse(a < b, b, a),
+                map_score  = score_fcts$bp((2 * Diastolic + Systolic) / 3),
+                a = score_fcts$hr(PuHightest),
+                b = score_fcts$hr(PuLowest),
+                hr_score = ifelse(a < b, b, a),
+                a = score_fcts$rr(ResHightest),
+                b = score_fcts$rr(ResLowest),
+                rr_score = ifelse(a < b, b, a),
+                PaCO2 = ifelse(is.na(PaCO2), HCO3 / (0.03 * 10 ^ (ArterialpH - 6.1)), PaCO2),
+                aa_gradient = 713 * FiO2 - PaCO2 / .8 - PaO2,
+                a_score = ifelse(is.na(aa_gradient) | FiO2 < .5, score_fcts$pao2(PaO2), score_fcts$aa_gradient(aa_gradient)),
+                ph_score = ifelse(is.na(ArterialpH), score_fcts$hco3(HCO3), score_fcts$ph(ArterialpH)),
+                na_score = score_fcts$na(Sodium),
+                k_score = score_fcts$k(Potassium),
+                creatinine_score = score_fcts$creatinine(Creatinine),
+                hematocrit_score = score_fcts$hematocrit(Haematocrit),
+                wbc_score = score_fcts$wbc(BloodCell),
+                gcs = ifelse(GlasgowScore == "Preintubation",
+                             ifelse(is.na(Motor) | is.na(Verbal) | is.na(Eyes) |
+                                      Motor == 0 | Verbal == 0   | Eyes == 0   |
+                                      Motor == 9 | Verbal == 9   | Eyes == 9,
+                                    Total,
+                                    Motor + Verbal + Eyes),
+                             15),
+                gcs_score = score_fcts$gcs(gcs),
+                age_score = score_fcts$age(age),
+                c_score = ifelse(Mode + CongIV + Seve + AIDS < 1,
+                                 0,
+                                 ifelse(Emergency,
+                                        5,
+                                        ifelse(Elective, 2, 5))),
+                apache = temp_score + map_score + hr_score + rr_score + a_score + ph_score + na_score + k_score +
+                         creatinine_score + hematocrit_score + wbc_score + gcs_score + age_score + c_score) %>% 
+  select(PatientNo, TempMin, TempMax, temp_score, map_score, hr_score, rr_score, a_score, ph_score, na_score, k_score,
+         creatinine_score, hematocrit_score, wbc_score, gcs_score, age_score, c_score, apache) %>% 
+  filter(is.na(apache)) %>% 
+  print(n = 23)
+```
 
 
 
