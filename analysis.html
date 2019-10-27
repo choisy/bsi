@@ -369,9 +369,16 @@ summary {
 <div id="TOC">
 <ul>
 <li><a href="#packages">Packages</a></li>
-<li><a href="#reading-data">Reading data</a></li>
 <li><a href="#accessory-functions">Accessory functions</a></li>
+<li><a href="#reading-data">Reading data</a><ul>
+<li><a href="#adding-the-episode-variable-to-micbld">Adding the episode variable to MICBLD</a></li>
+<li><a href="#recoding-some-adm-variables-into-logical">Recoding some ADM variables into logical</a></li>
+<li><a href="#exploring-the-data">Exploring the data</a></li>
+<li><a href="#reading-the-dictionary-of-variables-and-levels">Reading the dictionary of variables and levels</a></li>
+</ul></li>
+<li><a href="#defining-additional-data-sets">Defining additional data sets</a></li>
 <li><a href="#defining-populations-groups">Defining populations / groups</a></li>
+<li><a href="#apache-ii-scores">APACHE-II Scores</a></li>
 <li><a href="#table-1-demographics">Table 1: demographics</a></li>
 </ul>
 </div>
@@ -411,34 +418,19 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 <p>Loading <code>magrittr</code> for interactive use:</p>
 <pre class="r"><code>library(magrittr)</code></pre>
 </div>
-<div id="reading-data" class="section level2">
-<h2>Reading data</h2>
-<p>The data are in this file:</p>
-<pre class="r"><code>data_file &lt;- &quot;19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
-<p>The list of sheets that we are interested in:</p>
-<pre class="r"><code>sheets &lt;- c(&quot;ADM&quot;, &quot;AIR&quot;, &quot;APAC&quot;, &quot;DAILY1n2&quot;, &quot;ENR&quot;, &quot;FINISH&quot;, &quot;FU&quot;, &quot;FU_DAY90&quot;, &quot;MICBLD&quot;)</code></pre>
-<p>Reading all the sheets of this file:</p>
-<pre class="r"><code>data &lt;- sheets %&gt;%
-  lapply(readxl::read_excel, path = data_file) %&gt;% 
-  setNames(sheets)</code></pre>
-<p>Note that some of these data sets have one row per patient whereas other data sets have more than one row per patient:</p>
-<pre class="r"><code>(nbrow &lt;- sapply(data, function(x) length(unique(table(x$PatientNo)))))</code></pre>
-<pre><code>##      ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
-##        1        1        1       72        1        1        1        1        7</code></pre>
-<pre class="r"><code>sapply(data, nrow)</code></pre>
-<pre><code>##      ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
-##      597      597      597    11461      597      597      579      405      312</code></pre>
-<p>Reading the dictionary of variables and levels:</p>
-<pre class="r"><code>dictionary &lt;- readxl::read_excel(&quot;Copy of CTU16HN_DataDictionary.xlsx&quot;, &quot;Category&quot;)</code></pre>
-</div>
 <div id="accessory-functions" class="section level2">
 <h2>Accessory functions</h2>
+<p>The following function replaces <code>FALSE</code> surounded by <code>TRUE</code> values by <code>TRUE</code> in a logical vector:</p>
 <pre class="r"><code>fill_gaps &lt;- function(x) {
   require(magrittr)
   as.integer(x) %&gt;%         # because easier to deal with 1-character encoding
     paste(collapse = &quot;&quot;) %&gt;% 
     gsub(&quot;101&quot;, &quot;111&quot;, .)
 }</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>fill_gaps(c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE))</code></pre>
+<pre><code>## [1] &quot;1111001&quot;</code></pre>
+<p>The following function replaces <code>111000111100110011</code> by <code>111000222200330044</code></p>
 <pre class="r"><code>episodes &lt;- function(x) {
   require(magrittr)
   x %&lt;&gt;% 
@@ -450,7 +442,26 @@ if (length(to_install)) install.packages(to_install)</code></pre>
   x$values[sel] &lt;- seq_along(sel)
   inverse.rle(x)
 }</code></pre>
-<p>This function uses <code>fill_gaps()</code> and <code>episodes()</code> to compute the <code>episode</code> variable for a given patient:</p>
+<p>Let’s try it:</p>
+<pre class="r"><code>episodes(&quot;111000111100110011&quot;)</code></pre>
+<pre><code>##  [1] 1 1 1 0 0 0 2 2 2 2 0 0 3 3 0 0 4 4</code></pre>
+<p>A tuning of the <code>dplyr::left_join()</code> function:</p>
+<pre class="r"><code>leftjoin &lt;- function(...) dplyr::left_join(..., by = &quot;PatientNo&quot;)</code></pre>
+</div>
+<div id="reading-data" class="section level2">
+<h2>Reading data</h2>
+<p>The data are in this file:</p>
+<pre class="r"><code>data_file &lt;- &quot;19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
+<p>The list of sheets that we are interested in:</p>
+<pre class="r"><code>sheets &lt;- c(&quot;ADM&quot;, &quot;AIR&quot;, &quot;APAC&quot;, &quot;DAILY1n2&quot;, &quot;ENR&quot;, &quot;FINISH&quot;, &quot;FU&quot;, &quot;FU_DAY90&quot;, &quot;MICBLD&quot;)</code></pre>
+<p>Reading all the sheets of this file and transforming the dates:</p>
+<pre class="r"><code>data &lt;- sheets %&gt;%
+  lapply(readxl::read_excel, path = data_file) %&gt;% 
+  lapply(function(x) dplyr::mutate_if(x, function(y) &quot;POSIXct&quot; %in% class(y), as.Date)) %&gt;% 
+  setNames(sheets)</code></pre>
+<div id="adding-the-episode-variable-to-micbld" class="section level3">
+<h3>Adding the episode variable to MICBLD</h3>
+<p>In order to be able to add the <code>episode</code> variable to <code>data$MICBLD</code> we need to define the following function that computes the <code>episode</code> variable for a given patient using the <code>fill_gaps()</code> and <code>episodes()</code> accessory functions that we defined above:</p>
 <pre class="r"><code>compute_episode &lt;- function(x) {
   require(magrittr)
   x %$% 
@@ -465,13 +476,9 @@ if (length(to_install)) install.packages(to_install)</code></pre>
     dplyr::left_join(x, ., &quot;HAIDate&quot;) %&gt;% 
     dplyr::select(id, episode)
 }</code></pre>
-</div>
-<div id="defining-populations-groups" class="section level2">
-<h2>Defining populations / groups</h2>
 <p>Adding the <code>episode</code> variable to <code>data$MICBLD</code>:</p>
 <pre class="r"><code>data$MICBLD %&lt;&gt;% 
-  dplyr::mutate(id      = dplyr::row_number(),
-                HAIDate = as.Date(HAIDate)) %&gt;% 
+  dplyr::mutate(id = dplyr::row_number()) %&gt;% 
   assign(&quot;tmp2&quot;, ., 1) %&gt;% 
   dplyr::filter(OrganismsNo &gt; 0) %&gt;% 
   dplyr::select(id, PatientNo, HAIDate) %&gt;% 
@@ -485,22 +492,66 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 <pre><code>## 
 ##  1  2 
 ## 48  7</code></pre>
+</div>
+<div id="recoding-some-adm-variables-into-logical" class="section level3">
+<h3>Recoding some ADM variables into logical</h3>
+<pre class="r"><code>data$ADM %&lt;&gt;% 
+  dplyr::mutate(Mode      = Mode      == &quot;Yes&quot;,
+                CongIV    = CongIV    == &quot;Yes&quot;,
+                Seve      = Seve      == &quot;Yes&quot;,
+                AIDS      = AIDS      == &quot;Yes&quot;,
+                Elective  = Elective  == &quot;Yes&quot;,
+                Emergency = Emergency == &quot;Yes&quot;)</code></pre>
+</div>
+<div id="exploring-the-data" class="section level3">
+<h3>Exploring the data</h3>
+<p>Note that some of these data sets have one row per patient whereas other data sets have more than one row per patient:</p>
+<pre class="r"><code>(nbrow &lt;- sapply(data, function(x) length(unique(table(x$PatientNo)))))</code></pre>
+<pre><code>##      ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
+##        1        1        1       72        1        1        1        1        7</code></pre>
+<p>The number of rows of each of the data sets:</p>
+<pre class="r"><code>sapply(data, nrow)</code></pre>
+<pre><code>##      ADM      AIR     APAC DAILY1n2      ENR   FINISH       FU FU_DAY90   MICBLD 
+##      597      597      597    11461      597      597      579      405      312</code></pre>
+</div>
+<div id="reading-the-dictionary-of-variables-and-levels" class="section level3">
+<h3>Reading the dictionary of variables and levels</h3>
+<pre class="r"><code>dictionary &lt;- readxl::read_excel(&quot;Copy of CTU16HN_DataDictionary.xlsx&quot;, &quot;Category&quot;)</code></pre>
+</div>
+</div>
+<div id="defining-additional-data-sets" class="section level2">
+<h2>Defining additional data sets</h2>
 <p>Defining blood collection date of first episode:</p>
-<pre class="r"><code>first_episodes &lt;- data$MICBLD %&gt;% 
+<pre class="r"><code>(first_episodes &lt;- data$MICBLD %&gt;% 
   dplyr::filter(episode &lt; 2) %&gt;%
   dplyr::group_by(PatientNo) %&gt;% 
-  dplyr::summarise(blood_collection = min(HAIDate))</code></pre>
-<p>Converting the <code>VSDate</code> variable of <code>data$DAILY1n2</code>:</p>
-<pre class="r"><code>data$DAILY1n2 %&lt;&gt;% dplyr::mutate(VSDate = as.Date(VSDate))</code></pre>
-<p>Defining variables:</p>
+  dplyr::summarise(blood_collection = min(HAIDate)))</code></pre>
+<pre><code>## # A tibble: 44 x 2
+##    PatientNo blood_collection
+##    &lt;chr&gt;     &lt;date&gt;          
+##  1 003-031   2017-05-03      
+##  2 003-066   2017-09-21      
+##  3 003-148   2018-11-15      
+##  4 003-155   2018-12-17      
+##  5 003-504   2016-12-02      
+##  6 003-508   2016-12-17      
+##  7 003-510   2016-12-15      
+##  8 003-511   2016-12-21      
+##  9 003-514   2016-12-31      
+## 10 003-516   2016-12-31      
+## # … with 34 more rows</code></pre>
+</div>
+<div id="defining-populations-groups" class="section level2">
+<h2>Defining populations / groups</h2>
+<p>The code below defines the variables of interest. Note that the data sets <code>MICBLD</code> and <code>DAILY1n2</code> are managed differently than the data sets <code>FINISH</code>, <code>ENR</code>, <code>ADM</code> and <code>AIR</code> because they do not have one row per patient.</p>
 <pre class="r"><code>data2 &lt;- data$FINISH %&gt;%
+  dplyr::select(PatientNo, IsCompleted, IsAgree, HosDate) %&gt;% 
+  leftjoin(dplyr::select(data$ENR, PatientNo, Age, RandDate, YOB, Sex)) %&gt;%
+  leftjoin(dplyr::select(data$ADM, PatientNo, Source, NKQ, HospitalDate, Mode, CongIV, Seve, AIDS, Elective, Emergency)) %&gt;%
+  leftjoin(dplyr::select(data$AIR, PatientNo, IsTrach)) %&gt;%
   
 # exclude patients not completed and not agreed --------------------------------
   dplyr::filter(!(IsCompleted == 2 &amp; IsAgree != &quot;Yes&quot;)) %&gt;% 
-  
-# define HABSI variable --------------------------------------------------------
-  dplyr::left_join(dplyr::select(data$ADM, PatientNo, HospitalDate), &quot;PatientNo&quot;) %&gt;%
-  dplyr::mutate(habsi = tidyr::replace_na(HosDate - HospitalDate &gt; 1, FALSE)) %&gt;% # replace NA with FALSE
   
 # define BSI variable ----------------------------------------------------------
   dplyr::left_join(dplyr::filter(data$MICBLD, OrganismsNo &gt; 0) %&gt;% 
@@ -510,39 +561,36 @@ if (length(to_install)) install.packages(to_install)</code></pre>
   dplyr::mutate(bsi = tidyr::replace_na(bsi, FALSE)) %&gt;%  # replace NA with FALSE
   
 # define patients at risk of CLBSI ---------------------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% 
-                     dplyr::group_by(PatientNo) %&gt;% 
-                     dplyr::summarise(clbsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-  dplyr::mutate(clbsi_risk = tidyr::replace_na(clbsi_risk, FALSE)) %&gt;%  # replace NA with FALSE
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% # similar to AL BSI
+                     dplyr::group_by(PatientNo) %&gt;%  # same as for AL BSI
+                     dplyr::summarise(clbsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to AL BSI
+  dplyr::mutate(clbsi_risk = tidyr::replace_na(clbsi_risk, FALSE)) %&gt;%  # replace NA with FALSE, similar to AL BSI
   
 # define CLBSI -----------------------------------------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% 
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% # similar to AL BSI
                      dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for AL BSI
                      dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for AL BSI
                      dplyr::group_by(PatientNo) %&gt;%                    # same as for AL BSI
-                     dplyr::summarise(clbsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-  dplyr::mutate(clbsi = tidyr::replace_na(clbsi, FALSE)) %&gt;%  # replace NA with FALSE
+                     dplyr::summarise(clbsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to AL BSI
+  dplyr::mutate(clbsi = tidyr::replace_na(clbsi, FALSE)) %&gt;%  # replace NA with FALSE, similar to AL BSI
   
 # define patients at risk of arterial line BSI ---------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% 
-                     dplyr::group_by(PatientNo) %&gt;% 
-                     dplyr::summarise(al_bsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-  dplyr::mutate(al_bsi_risk = tidyr::replace_na(al_bsi_risk, FALSE)) %&gt;%  # replace NA with FALSE
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% # similar to CLBSI
+                     dplyr::group_by(PatientNo) %&gt;% # same as for CLBSI
+                     dplyr::summarise(al_bsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to CLBSI
+  dplyr::mutate(al_bsi_risk = tidyr::replace_na(al_bsi_risk, FALSE)) %&gt;%  # replace NA with FALSE, similar to CLBSI
   
 # define patients with arterial line BSI ---------------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% 
+  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% # similar to CLBSI
                      dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for CLBSI
                      dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for CLBSI
                      dplyr::group_by(PatientNo) %&gt;%                    # same as for CLBSI
-                     dplyr::summarise(al_bsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% 
-  dplyr::mutate(al_bsi = tidyr::replace_na(al_bsi, FALSE)) %&gt;%  # replace NA with FALSE
-
-# adding other variables -------------------------------------------------------
-  dplyr::left_join(dplyr::select(data$ENR, PatientNo, Age, RandDate, YOB, Sex), &quot;PatientNo&quot;) %&gt;%
-  dplyr::left_join(dplyr::select(data$ADM, PatientNo, Source, NKQ), &quot;PatientNo&quot;) %&gt;%
-  dplyr::left_join(dplyr::select(data$AIR, PatientNo, IsTrach), &quot;PatientNo&quot;) %&gt;%
-
-  dplyr::mutate(
+                     dplyr::summarise(al_bsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to CLBSI
+  dplyr::mutate(al_bsi = tidyr::replace_na(al_bsi, FALSE),  # replace NA with FALSE, similar to CLBSI
+    
+# define HABSI variable --------------------------------------------------------
+    habsi = tidyr::replace_na(HosDate - HospitalDate &gt; 1, FALSE), # replace NA with FALSE
+    
 # define hospitals -------------------------------------------------------------
     hospital = dplyr::recode(sub(&quot;-.*$&quot;, &quot;&quot;, PatientNo),
                              `003` = &quot;HTD&quot;,
@@ -550,13 +598,147 @@ if (length(to_install)) install.packages(to_install)</code></pre>
                              `103` = &quot;BVTV&quot;),
 
 # any tracheostomy -------------------------------------------------------------
-    tracheo  = ifelse(NKQ &lt; 2 | IsTrach == &quot;Yes&quot;, &quot;tracheostomy&quot;, &quot;no tracheostomy&quot;),
+#    tracheo  = ifelse(NKQ &lt; 2 | IsTrach == &quot;Yes&quot;, &quot;tracheostomy&quot;, &quot;no tracheostomy&quot;),
+    tracheo  = NKQ &lt; 2 | IsTrach == &quot;Yes&quot;,
 
 # define tracheostomy vs month -------------------------------------------------
     nkq      = c(&quot;tracheostomy&quot;, &quot;mouth&quot;)[NKQ],
 
 # computing age ----------------------------------------------------------------
-    age      = ifelse(is.na(Age), round(as.numeric(as.Date(RandDate) - lubridate::ymd(paste(YOB, &quot;0101&quot;))) / 365), Age)) # maybe we should consider 1st of July instead?</code></pre>
+    age      = ifelse(is.na(Age), round(as.numeric(RandDate - lubridate::ymd(paste(YOB, &quot;0101&quot;))) / 365), Age)) %&gt;%  # maybe we should consider 1st of July instead?
+  
+# selecting variables of interest ----------------------------------------------
+  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB)</code></pre>
+<p><strong>Note:</strong> nothing to worry about the parsing failure. It concerns <code>NA</code> in the <code>YOB</code> variable that is not used anyway.</p>
+</div>
+<div id="apache-ii-scores" class="section level2">
+<h2>APACHE-II Scores</h2>
+<p>The Apache-II Score provides an estimate of ICU mortality based on a number of laboratory values and patient signs taking both acute and chronic disease into account.</p>
+<p><strong>Note:</strong> The data used should relate to the 24 hours prior to randomisation and the worst (highest scoring) recorded values should be used.</p>
+<p>This function below computes score functions:</p>
+<pre class="r"><code>make_score_functions &lt;- function(scores, values) {
+  function(x) scores[cut(x, c(-Inf, values, +Inf), right = FALSE)]
+}</code></pre>
+<p>The parameters values for the score functions:</p>
+<pre class="r"><code>apache_physio &lt;- list(
+  temp = list(
+    scores = c(4:0, 1, 3, 4),
+    values = c(30, 32, 34, 36, 38.5, 39, 41)),
+  bp = list(
+    scores = c(4, 2, 0, 2:4),
+    values = c(50, 70, 110, 130, 160)),
+  hr = list(
+    scores = c(4, 3, 2, 0, 2, 3, 4),
+    values = c(40, 55, 70, 110, 140, 180)),
+  rr = list(
+    scores = c(4, 2, 1, 0, 1, 3, 4),
+    values = c(6, 10, 25, 35, 50)),
+  pao2 = list(
+    scores = 4:0,
+    values = c(55, 61, 70)),
+  aa_gradient = list(
+    scores = 0:4,
+    values = c(200, 350, 500)),
+  ph = list(
+    scores = c(4, 3, 2, 0, 1, 3, 4),
+    values = c(7.15, 7.25, 7.33, 7.5, 7.6, 7.7)),
+  hco3 = list(
+    scores = c(4, 3, 2, 0, 1, 3, 4),
+    values = c(15, 18, 23, 32, 41, 52)),
+  na = list(
+    scores = c(4:2, 0:4),
+    values = c(111, 120, 130, 150, 155, 160, 180)),
+  k = list(
+    scores = c(4, 2:0, 1, 3, 4),
+    values = c(2.5, 3, 3.5, 5.5, 6, 7)),
+  creatinine = list(
+    scores = c(2, 0, 2:4),
+    values = c(0.6, 1.5, 2, 3.5)),
+  hematocrit = list(
+    scores = c(4, 2, 0:2, 4),
+    values = c(20, 30, 46, 50, 60)),
+  wbc = list(
+    scores = c(4, 2, 0:2, 4),
+    values = c(1, 3, 15, 20, 40)),
+  age = list(
+    scores = c(0, 2, 3, 5, 6),
+    values = c(45, 55, 65, 75)))</code></pre>
+<p>Let’s generate the score functions:</p>
+<pre class="r"><code>score_fcts &lt;- setNames(lapply(apache_physio,
+                              function(x) make_score_functions(x$scores, x$values)), 
+                       names(apache_physio))</code></pre>
+<p>Let’s see an example:</p>
+<pre class="r"><code>head(score_fcts$temp(data$DAILY1n2$TempMax), 100)</code></pre>
+<pre><code>##   [1]  3  1  0  0  0  0  0  0  0  3  1  3  1  0  0  1  3  3  3  3  4  0  0  0  0  0  0  0  3  3  1  3  0  0  0  0  0  0  1  0  0  0  0  1  0  0  1  4  1  3  3  0  0  0  3  0  0  0  0  0  3  0  0  3  3
+##  [66]  1  1  1  3  1  1  3  3  3  0  0  3  3  3  3  0  0  1  1  1  0 NA  3  3  1  1  1  0  0  0  0  0  0  0  0</code></pre>
+<pre class="r"><code>data$APAC %&gt;% 
+  dplyr::left_join(dplyr::select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency), &quot;PatientNo&quot;) %&gt;% 
+  dplyr::left_join(dplyr::select(data$DAILY1n2, PatientNo, VSDate, TempMax, TempMin), c(&quot;PatientNo&quot;, &quot;RandDate&quot; = &quot;VSDate&quot;)) %&gt;% 
+  dplyr::mutate(a = score_fcts$temp(TempMax),
+                b = score_fcts$temp(TempMin),
+                temp_score = ifelse(a &lt; b, b, a),
+                map_score  = score_fcts$bp((2 * Diastolic + Systolic) / 3),
+                a = score_fcts$hr(PuHightest),
+                b = score_fcts$hr(PuLowest),
+                hr_score = ifelse(a &lt; b, b, a),
+                a = score_fcts$rr(ResHightest),
+                b = score_fcts$rr(ResLowest),
+                rr_score = ifelse(a &lt; b, b, a),
+                PaCO2 = ifelse(is.na(PaCO2), HCO3 / (0.03 * 10 ^ (ArterialpH - 6.1)), PaCO2),
+                aa_gradient = 713 * FiO2 - PaCO2 / .8 - PaO2,
+                a_score = ifelse(is.na(aa_gradient) | FiO2 &lt; .5, score_fcts$pao2(PaO2), score_fcts$aa_gradient(aa_gradient)),
+                ph_score = ifelse(is.na(ArterialpH), score_fcts$hco3(HCO3), score_fcts$ph(ArterialpH)),
+                na_score = score_fcts$na(Sodium),
+                k_score = score_fcts$k(Potassium),
+                creatinine_score = score_fcts$creatinine(Creatinine),
+                hematocrit_score = score_fcts$hematocrit(Haematocrit),
+                wbc_score = score_fcts$wbc(BloodCell),
+                gcs_score = 15 - ifelse(GlasgowScore == &quot;Preintubation&quot;,
+                                        ifelse(is.na(Motor) | is.na(Verbal) | is.na(Eyes) |
+                                                 Motor == 0 | Verbal == 0   | Eyes == 0   |
+                                                 Motor == 9 | Verbal == 9   | Eyes == 9,
+                                               Total,
+                                               Motor + Verbal + Eyes),
+                                        15),
+                age_score = score_fcts$age(age),
+                c_score = ifelse(Mode + CongIV + Seve + AIDS &lt; 1,
+                                 0,
+                                 ifelse(Emergency,
+                                        5,
+                                        ifelse(Elective, 2, 5))),
+                apache = temp_score + map_score + hr_score + rr_score + a_score + ph_score + na_score + k_score +
+                         creatinine_score + hematocrit_score + wbc_score + gcs_score + age_score + c_score) %&gt;% 
+  dplyr::select(PatientNo, TempMin, TempMax, temp_score, map_score, hr_score, rr_score, a_score, ph_score, na_score, k_score,
+                creatinine_score, hematocrit_score, wbc_score, gcs_score, age_score, c_score, apache) %&gt;% 
+  dplyr::filter(is.na(apache)) %&gt;% 
+  print(n = 23)</code></pre>
+<pre><code>## # A tibble: 23 x 18
+##    PatientNo TempMin TempMax temp_score map_score hr_score rr_score a_score ph_score na_score k_score creatinine_score hematocrit_score wbc_score gcs_score age_score c_score apache
+##    &lt;chr&gt;       &lt;dbl&gt;   &lt;dbl&gt;      &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;   &lt;int&gt;    &lt;dbl&gt;    &lt;int&gt;   &lt;dbl&gt;            &lt;dbl&gt;            &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;  &lt;dbl&gt;
+##  1 003-020      NA      NA           NA         0        2        1       1        1        0       1                4                0         0         6         0       0     NA
+##  2 003-030      37.6    38.5          1         2        2        1       0        0        0      NA                4                0         2         0         2       0     NA
+##  3 003-088      NA      NA           NA         2        3        1       1        1        2       0                4                2         0         7         0       5     NA
+##  4 003-583      37      37.4          0         3        0        1      NA       NA        0       1                4                0         0         0         2       0     NA
+##  5 003-637      NA      NA           NA         0        0        1       2        0        0       2                4                0         2         0         6       0     NA
+##  6 020-007      NA      NA           NA         2        2        1       1        2        0       0                4                2         2         0         0       0     NA
+##  7 020-031      36      37.2          0         0        0        0      NA        0        0       0                4                0         1         3         3       0     NA
+##  8 020-032      36.5    37.5          0         2        2        1       1        0        0       0                4               NA        NA         6         0       0     NA
+##  9 020-043      NA      NA           NA         2        0        1       1        0        0       0                4                0         0         0         6       0     NA
+## 10 020-047      NA      NA           NA         0        2        1       1        1        0       0                4                2         0        NA         6       0     NA
+## 11 020-086      37      37.3          0         0        0        0       3        3       NA      NA               NA               NA        NA         7         5       0     NA
+## 12 020-088      37      37.2          0         0        2        1      NA        1        0       1                4                2         0         1         6       0     NA
+## 13 020-098      37      39            3         0        2        1       1        0        0       1                4                0         0        NA         0       0     NA
+## 14 020-108      35      37.9          1         0        2        0       1        3        0       0                4                2         1        NA         2       0     NA
+## 15 020-509      37.1    37.7          0         0        2        1       1        0        0       1                4                1         0        NA         3       0     NA
+## 16 020-511      36.2    37.5          0         0        0        1      NA        0        0       1                4                0         0         0         6       0     NA
+## 17 103-016      NA      NA           NA         0        2        1       1        3        0       0                4                0         0         0         2       5     NA
+## 18 103-020      NA      NA           NA         0        2        1       2        1        0       0                4                2         2         6         6       0     NA
+## 19 103-037      NA      NA           NA         0        2        1       1        2        0       0                4                2         0         0         6       0     NA
+## 20 103-049      NA      NA           NA         0        2        1       1        0        0       0                4                0         1         0         0       0     NA
+## 21 103-051      NA      NA           NA         4        0        1       1        0        0       0                4                0         2         9         0       0     NA
+## 22 103-059      NA      NA           NA         0        3        1       3        0        0       4                4                4         2         0         0       0     NA
+## 23 103-075      NA      NA           NA         0        2        1       1        1        0       1                4                2         0         3         6       0     NA</code></pre>
+<p>As we can see above, some scores are <code>NA</code>. We need to think about how to deal with that.</p>
 </div>
 <div id="table-1-demographics" class="section level2">
 <h2>Table 1: demographics</h2>
@@ -585,8 +767,13 @@ if (length(to_install)) install.packages(to_install)</code></pre>
     dplyr::mutate(x = dplyr::recode(as.character(x), `FALSE` = paste(&quot;with&quot;, toupper(v)), `TRUE` = paste(&quot;without&quot;, toupper(v)))) %&gt;% 
     tidyr::pivot_wider(names_from = x, values_from = y)
 }</code></pre>
+<p>Some recoding of variables:</p>
+<pre class="r"><code>data3 &lt;- data2 %&gt;% 
+  dplyr::mutate(tracheo = dplyr::recode(as.character(tracheo),
+                                        `TRUE`  = &quot;tracheostomy&quot;,
+                                        `FALSE` = &quot;no tracheostomy&quot;))</code></pre>
 <pre class="r"><code>for(v in c(&quot;habsi&quot;, &quot;bsi&quot;, &quot;clbsi_risk&quot;, &quot;clbsi&quot;, &quot;al_bsi_risk&quot;, &quot;al_bsi&quot;)) {
-  for (g in c(&quot;hospital&quot;, &quot;Sex&quot;, &quot;Source&quot;, &quot;nkq&quot;, &quot;tracheo&quot;)) print(f1(v, g, data2))
+  for (g in c(&quot;hospital&quot;, &quot;Sex&quot;, &quot;Source&quot;, &quot;nkq&quot;, &quot;tracheo&quot;)) print(f1(v, g, data3))
 }</code></pre>
 <pre><code>## # A tibble: 3 x 3
 ##   y     `with HABSI` `without HABSI`
@@ -750,6 +937,12 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 1 no tracheostomy             1              313
 ## 2 tracheostomy               20              262
 ## 3 &lt;NA&gt;                       NA                1</code></pre>
+<pre class="r"><code>f1(&quot;habsi&quot;, &quot;al_bsi_risk&quot;, data3)</code></pre>
+<pre><code>## # A tibble: 2 x 3
+##   y     `with HABSI` `without HABSI`
+##   &lt;lgl&gt;        &lt;int&gt;           &lt;int&gt;
+## 1 FALSE          175             267
+## 2 TRUE            85              70</code></pre>
 <pre class="r"><code>f2(&quot;habsi&quot;, &quot;age&quot;, data2)</code></pre>
 <pre><code>## # A tibble: 1 x 2
 ##   `with HABSI`    `without HABSI`
