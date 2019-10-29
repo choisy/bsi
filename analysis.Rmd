@@ -272,16 +272,6 @@ data$DAILY1n2 %>%
   two_consecutive("name")
 ```
 
-and 
-
-```{r}
-data$DAILY1n2 %>% 
-  dplyr::filter(PatientNo == "003-002") %>% 
-  dplyr::select(PatientNo, VSDate, CVCCount) %>% 
-  print() %>% 
-  two_consecutive("name")
-```
-
 List of functions:
 
 ```{r}
