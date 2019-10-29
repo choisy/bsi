@@ -83,7 +83,7 @@ a logical vector:
 ```{r}
 fill_gaps <- function(x) {
   require(magrittr)
-  as.integer(x) %>%         # because easier to deal with 1-character encoding
+  as.integer(x) %>% # because easier to deal with 1-character encoding
     paste(collapse = "") %>% 
     gsub("101", "111", .)
 }
@@ -121,6 +121,12 @@ A tuning of the `dplyr::left_join()` function:
 
 ```{r}
 leftjoin <- function(...) dplyr::left_join(..., by = "PatientNo")
+```
+
+A tuning of the `dplyr::bind_rows()` function:
+
+```{r}
+bindrows <- function(...) dplyr::bind_rows(..., .id = "PatientNo")
 ```
 
 ## Reading data
@@ -195,12 +201,9 @@ table(data$MICBLD$episode)
 
 ```{r}
 data$ADM %<>% 
-  dplyr::mutate(Mode      = Mode      == "Yes",
-                CongIV    = CongIV    == "Yes",
-                Seve      = Seve      == "Yes",
-                AIDS      = AIDS      == "Yes",
-                Elective  = Elective  == "Yes",
-                Emergency = Emergency == "Yes")
+  dplyr::mutate_at(
+    c("Mode", "CongIV", "Seve", "AIDS", "Elective", "Emergency", "Myo", "DiaCo", "DiaDa"),
+    function(x) dplyr::na_if(x, "NA") == "Yes")
 ```
 
 ### Exploring the data
@@ -224,28 +227,127 @@ sapply(data, nrow)
 dictionary <- readxl::read_excel("Copy of CTU16HN_DataDictionary.xlsx", "Category")
 ```
 
-## Defining additional data sets
+## Redefining MICBLD and DAILY1n2
 
-Defining blood collection date of first episode:
+The `MICBLD` and `DAILY1n2` data sets have several rows per patient. Here we
+compute summaries of these data sets with one row per patient so that they can
+easily be merge with the other data sets.
 
 ```{r}
-(first_episodes <- data$MICBLD %>% 
-  dplyr::filter(episode < 2) %>%
-  dplyr::group_by(PatientNo) %>% 
-  dplyr::summarise(blood_collection = min(HAIDate)))
+(micbld <- lapply(list(function(x) x %>% # this function should be first
+                         dplyr::group_by(PatientNo) %>% 
+                         dplyr::summarise(bsi = any(OrganismsNo > 0)),
+                       function(x) x %>% 
+                         dplyr::filter(episode < 2) %>% # blood collection of first episode
+                         dplyr::group_by(PatientNo) %>% 
+                         dplyr::summarise(blood_collection = min(HAIDate))),
+                  function(f) f(data$MICBLD)) %>% 
+   purrr::reduce(leftjoin))
+```
+
+### The DAILY1n2 data set
+
+The following function tells, for one data frame of one patient, where there are
+two consecutive dates:
+
+```{r}
+two_consecutive <- function(x, name) {
+  x %>% 
+    dplyr::arrange(VSDate) %>% 
+    purrr::pluck("VSDate") %>% 
+    diff() %>% 
+    `<`(2) %>% 
+    any() %>% 
+    tibble::enframe(name = NULL, value = name)
+}
+```
+
+Let's try it:
+
+```{r}
+data$DAILY1n2 %>% 
+  dplyr::filter(PatientNo == "003-001") %>% 
+  dplyr::select(PatientNo, VSDate, CVCCount) %>% 
+  print() %>% 
+  two_consecutive("name")
+```
+
+and 
+
+```{r}
+data$DAILY1n2 %>% 
+  dplyr::filter(PatientNo == "003-002") %>% 
+  dplyr::select(PatientNo, VSDate, CVCCount) %>% 
+  print() %>% 
+  two_consecutive("name")
+```
+
+List of functions:
+
+```{r}
+lfcts <- list(
+  clbsi_risk = function(df, name) { # difference
+    require(magrittr)
+    df %>% 
+      split(.$PatientNo) %>% 
+      lapply(function(x) x %>% 
+        dplyr::filter(CVCCount > 0) %>% # difference
+        two_consecutive(name)) %>% 
+      bindrows()
+  },
+  
+  al_bsi_risk = function(df, name) { # difference
+    require(magrittr)
+    df %>% 
+      split(.$PatientNo) %>% 
+      lapply(function(x) x %>% 
+        dplyr::filter(Arterial == "Yes") %>% # difference
+        two_consecutive(name)) %>% 
+      bindrows()
+  },
+  
+  clbsi = function(df, name) { # difference
+    require(magrittr)
+    df %>% 
+      leftjoin(micbld) %>% 
+      split(.$PatientNo) %>% 
+      lapply(function(x) x %>% 
+               dplyr::filter(CVCCount > 0) %>% # difference
+               dplyr::filter(blood_collection - VSDate < 6) %>% 
+               two_consecutive(name)) %>% 
+      bindrows()
+  },
+  
+  al_bsi = function(df, name) { # difference
+    require(magrittr)
+    df %>% 
+      leftjoin(micbld) %>% 
+      split(.$PatientNo) %>% 
+      lapply(function(x) x %>% 
+               dplyr::filter(Arterial == "Yes") %>% # difference
+               dplyr::filter(blood_collection - VSDate < 6) %>% 
+               two_consecutive(name)) %>% 
+      bindrows()
+  })
+```
+
+Applying to `data$DAILY1n2`:
+
+```{r}
+(daily <- purrr::map2(lfcts, names(lfcts), function(f, x) f(data$DAILY1n2, x)) %>% 
+  purrr::reduce(leftjoin))
 ```
 
 ## Defining populations / groups
 
-The code below defines the variables of interest. Note that the data sets
-`MICBLD` and `DAILY1n2` are managed differently than the data sets `FINISH`,
-`ENR`, `ADM` and `AIR` because they do not have one row per patient.
+The code below defines the variables of interest.
 
-```{r}
+```{r safe, eval = FALSE, include = FALSE}
 data2 <- data$FINISH %>%
-  dplyr::select(PatientNo, IsCompleted, IsAgree, HosDate) %>% 
+  dplyr::select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate) %>% 
   leftjoin(dplyr::select(data$ENR, PatientNo, Age, RandDate, YOB, Sex)) %>%
-  leftjoin(dplyr::select(data$ADM, PatientNo, Source, NKQ, HospitalDate, Mode, CongIV, Seve, AIDS, Elective, Emergency)) %>%
+  leftjoin(dplyr::select(data$ADM, PatientNo, Source, NKQ, HospitalDate, Mode, CongIV, Seve, AIDS, Elective, Emergency,
+                         Tetanus, Pneumonia, Sepsis, Septic, CNS, COPD, CVA, Myo, SpOther, DiaCo, DiaDa)) %>%
   leftjoin(dplyr::select(data$AIR, PatientNo, IsTrach)) %>%
   
 # exclude patients not completed and not agreed --------------------------------
@@ -266,7 +368,7 @@ data2 <- data$FINISH %>%
   
 # define CLBSI -----------------------------------------------------------------
   dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount > 0) %>% # similar to AL BSI
-                     dplyr::left_join(first_episodes, "PatientNo") %>% # same as for AL BSI
+                     dplyr::left_join(micbld, "PatientNo") %>% # same as for AL BSI
                      dplyr::filter(blood_collection - VSDate < 6) %>%  # same as for AL BSI
                      dplyr::group_by(PatientNo) %>%                    # same as for AL BSI
                      dplyr::summarise(clbsi = any(diff(VSDate) < 2)), "PatientNo") %>% # similar to AL BSI
@@ -280,7 +382,7 @@ data2 <- data$FINISH %>%
   
 # define patients with arterial line BSI ---------------------------------------
   dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == "Yes") %>% # similar to CLBSI
-                     dplyr::left_join(first_episodes, "PatientNo") %>% # same as for CLBSI
+                     dplyr::left_join(micbld, "PatientNo") %>% # same as for CLBSI
                      dplyr::filter(blood_collection - VSDate < 6) %>%  # same as for CLBSI
                      dplyr::group_by(PatientNo) %>%                    # same as for CLBSI
                      dplyr::summarise(al_bsi = any(diff(VSDate) < 2)), "PatientNo") %>% # similar to CLBSI
@@ -296,17 +398,93 @@ data2 <- data$FINISH %>%
                              `103` = "BVTV"),
 
 # any tracheostomy -------------------------------------------------------------
-#    tracheo  = ifelse(NKQ < 2 | IsTrach == "Yes", "tracheostomy", "no tracheostomy"),
-    tracheo  = NKQ < 2 | IsTrach == "Yes",
+    tracheo  = NKQ < 2 | dplyr::na_if(IsTrach, "NA") == "Yes",
 
 # define tracheostomy vs month -------------------------------------------------
     nkq      = c("tracheostomy", "mouth")[NKQ],
 
 # computing age ----------------------------------------------------------------
-    age      = ifelse(is.na(Age), round(as.numeric(RandDate - lubridate::ymd(paste(YOB, "0101"))) / 365), Age)) %>%  # maybe we should consider 1st of July instead?
+    age      = ifelse(is.na(Age), round(as.numeric(RandDate - lubridate::ymd(paste(YOB, "0101"))) / 365), Age),  # maybe we should consider 1st of July instead?
+  
+# other pathogens:
+    otherpth = ! is.na(SpOther), 
+
+# durations:
+    rand2icu   = ICUDate - RandDate,
+    rand2hos   = HosDate - RandDate,
+    adm2icu    = ICUDate - HospitalDate,
+    adm2hos    = HosDate - HospitalDate,
+
+# patient-days: 
+    patdayRand = sum(ICUDate - RandDate),
+    patdayHosp = sum(HosDate - RandDate),
+
+# at least one catheter:
+    
+  
+# sepsis:
+    sepsis   = Sepsis | Septic) %>% 
   
 # selecting variables of interest ----------------------------------------------
-  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB)
+  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB, -SpOther, -IsTrach, -NKQ, -Sepsis, -Septic, -ICUDate)
+```
+
+```{r}
+data2 <- data$FINISH %>%
+  dplyr::select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate) %>% 
+  leftjoin(dplyr::select(data$ENR, PatientNo, Age, RandDate, YOB, Sex)) %>%
+  leftjoin(dplyr::select(data$ADM, PatientNo, Source, NKQ, HospitalDate, Mode, CongIV, Seve, AIDS, Elective, Emergency,
+                         Tetanus, Pneumonia, Sepsis, Septic, CNS, COPD, CVA, Myo, SpOther, DiaCo, DiaDa)) %>%
+  leftjoin(dplyr::select(data$AIR, PatientNo, IsTrach)) %>%
+  leftjoin(dplyr::select(micbld, -blood_collection)) %>% 
+  leftjoin(daily) %>% 
+  
+# exclude patients not completed and not agreed --------------------------------
+  dplyr::filter(!(IsCompleted == 2 & IsAgree != "Yes")) %>% 
+
+# replace NA with FALSE --------------------------------------------------------  
+  dplyr::mutate_at(c("bsi", "clbsi_risk", "clbsi", "al_bsi_risk", "al_bsi"), tidyr::replace_na, FALSE) %>% 
+
+  dplyr::mutate(
+# define HABSI variable --------------------------------------------------------
+    habsi = tidyr::replace_na(HosDate - HospitalDate > 1, FALSE), # replace NA with FALSE
+    
+# define hospitals -------------------------------------------------------------
+    hospital = dplyr::recode(sub("-.*$", "", PatientNo),
+                             `003` = "HTD",
+                             `020` = "NHTD",
+                             `103` = "BVTV"),
+
+# any tracheostomy -------------------------------------------------------------
+    tracheo = NKQ < 2 | dplyr::na_if(IsTrach, "NA") == "Yes",
+
+# define tracheostomy vs month -------------------------------------------------
+    nkq = c("tracheostomy", "mouth")[NKQ],
+
+# computing age ----------------------------------------------------------------
+    age = ifelse(is.na(Age), round(as.numeric(RandDate - lubridate::ymd(paste(YOB, "0101"))) / 365), Age),  # maybe we should consider 1st of July instead?
+  
+# other pathogens:
+    otherpth = ! is.na(SpOther), 
+
+# durations:
+    rand2icu = ICUDate - RandDate,
+    rand2hos = HosDate - RandDate,
+    adm2icu  = ICUDate - HospitalDate,
+    adm2hos  = HosDate - HospitalDate,
+
+# patient-days: 
+    patdayRand = sum(ICUDate - RandDate),
+    patdayHosp = sum(HosDate - RandDate),
+
+# at least one catheter:
+    
+  
+# sepsis:
+    sepsis = Sepsis | Septic) %>% 
+  
+# selecting variables of interest ----------------------------------------------
+  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB, -SpOther, -IsTrach, -NKQ, -Sepsis, -Septic, -ICUDate)
 ```
 
 **Note:** nothing to worry about the parsing failure. It concerns `NA` in the
@@ -458,11 +636,11 @@ f1 <- function(v, g, data) {
 f2 <- function(v, g, data) {
   require(magrittr)
   iqr <- function(x) {
-    tmp <- quantile(x, c(.25, .5, .75))
+    tmp <- quantile(x, c(.25, .5, .75), na.rm = TRUE)
     paste0(tmp[2], " (IQR: ", tmp[1], "-", tmp[3], ")")
   }
   data2 %>% 
-    dplyr::mutate(x = .[[v]],
+    dplyr::mutate(x = ! .[[v]],
                   y = .[[g]]) %>%
     dplyr::group_by(x) %>% 
     dplyr::summarize(y = iqr(y)) %>% 
@@ -474,24 +652,40 @@ f2 <- function(v, g, data) {
 Some recoding of variables:
 
 ```{r}
-data3 <- data2 %>% 
-  dplyr::mutate(tracheo = dplyr::recode(as.character(tracheo),
-                                        `TRUE`  = "tracheostomy",
-                                        `FALSE` = "no tracheostomy"))
-```
-
-```{r}
-for(v in c("habsi", "bsi", "clbsi_risk", "clbsi", "al_bsi_risk", "al_bsi")) {
-  for (g in c("hospital", "Sex", "Source", "nkq", "tracheo")) print(f1(v, g, data3))
+recoding <- function(df, var) {
+  for (i in var)
+    df[, i] <- dplyr::recode(as.character(unlist(df[, i])), `TRUE` = i, `FALSE` = paste("no", i))
+  df
 }
 ```
 
 ```{r}
-f1("habsi", "al_bsi_risk", data3)
+data3 <- recoding(data2, c("tracheo", "clbsi_risk", "al_bsi_risk", "Tetanus", "Pneumonia", "sepsis",
+                           "CNS", "COPD", "CVA", "Myo", "otherpth", "Mode"))
+```
+
+```{r}
+for(v in c("habsi", "bsi", "clbsi", "al_bsi")) {
+  for (g in c("hospital", "Sex", "Source", "nkq", "tracheo", "clbsi_risk", "al_bsi_risk", "Tetanus",
+              "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpth", "Mode"))
+    print(f1(v, g, data3))
+}
+```
+
+```{r}
+f1("habsi", "Tetanus", data3)
 ```
 
 ```{r}
 f2("habsi", "age", data2)
 ```
 
+```{r}
+for(v in c("habsi", "bsi", "clbsi", "al_bsi")) {
+  c("age", "rand2icu", "rand2hos", "adm2icu", "adm2hos", "patdayRand", "patdayHosp") %>% 
+    setNames(purrr::map(., f2, v = v, data = data2), .) %>% 
+    dplyr::bind_rows(.id = "variable") %>% 
+    print()
+}
+```
 

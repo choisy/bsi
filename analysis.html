@@ -376,7 +376,9 @@ summary {
 <li><a href="#exploring-the-data">Exploring the data</a></li>
 <li><a href="#reading-the-dictionary-of-variables-and-levels">Reading the dictionary of variables and levels</a></li>
 </ul></li>
-<li><a href="#defining-additional-data-sets">Defining additional data sets</a></li>
+<li><a href="#redefining-micbld-and-daily1n2">Redefining MICBLD and DAILY1n2</a><ul>
+<li><a href="#the-daily1n2-data-set">The DAILY1n2 data set</a></li>
+</ul></li>
 <li><a href="#defining-populations-groups">Defining populations / groups</a></li>
 <li><a href="#apache-ii-scores">APACHE-II Scores</a></li>
 <li><a href="#table-1-demographics">Table 1: demographics</a></li>
@@ -423,7 +425,7 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 <p>The following function replaces <code>FALSE</code> surounded by <code>TRUE</code> values by <code>TRUE</code> in a logical vector:</p>
 <pre class="r"><code>fill_gaps &lt;- function(x) {
   require(magrittr)
-  as.integer(x) %&gt;%         # because easier to deal with 1-character encoding
+  as.integer(x) %&gt;% # because easier to deal with 1-character encoding
     paste(collapse = &quot;&quot;) %&gt;% 
     gsub(&quot;101&quot;, &quot;111&quot;, .)
 }</code></pre>
@@ -447,6 +449,8 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 <pre><code>##  [1] 1 1 1 0 0 0 2 2 2 2 0 0 3 3 0 0 4 4</code></pre>
 <p>A tuning of the <code>dplyr::left_join()</code> function:</p>
 <pre class="r"><code>leftjoin &lt;- function(...) dplyr::left_join(..., by = &quot;PatientNo&quot;)</code></pre>
+<p>A tuning of the <code>dplyr::bind_rows()</code> function:</p>
+<pre class="r"><code>bindrows &lt;- function(...) dplyr::bind_rows(..., .id = &quot;PatientNo&quot;)</code></pre>
 </div>
 <div id="reading-data" class="section level2">
 <h2>Reading data</h2>
@@ -496,12 +500,9 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 <div id="recoding-some-adm-variables-into-logical" class="section level3">
 <h3>Recoding some ADM variables into logical</h3>
 <pre class="r"><code>data$ADM %&lt;&gt;% 
-  dplyr::mutate(Mode      = Mode      == &quot;Yes&quot;,
-                CongIV    = CongIV    == &quot;Yes&quot;,
-                Seve      = Seve      == &quot;Yes&quot;,
-                AIDS      = AIDS      == &quot;Yes&quot;,
-                Elective  = Elective  == &quot;Yes&quot;,
-                Emergency = Emergency == &quot;Yes&quot;)</code></pre>
+  dplyr::mutate_at(
+    c(&quot;Mode&quot;, &quot;CongIV&quot;, &quot;Seve&quot;, &quot;AIDS&quot;, &quot;Elective&quot;, &quot;Emergency&quot;, &quot;Myo&quot;, &quot;DiaCo&quot;, &quot;DiaDa&quot;),
+    function(x) dplyr::na_if(x, &quot;NA&quot;) == &quot;Yes&quot;)</code></pre>
 </div>
 <div id="exploring-the-data" class="section level3">
 <h3>Exploring the data</h3>
@@ -519,75 +520,162 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 <pre class="r"><code>dictionary &lt;- readxl::read_excel(&quot;Copy of CTU16HN_DataDictionary.xlsx&quot;, &quot;Category&quot;)</code></pre>
 </div>
 </div>
-<div id="defining-additional-data-sets" class="section level2">
-<h2>Defining additional data sets</h2>
-<p>Defining blood collection date of first episode:</p>
-<pre class="r"><code>(first_episodes &lt;- data$MICBLD %&gt;% 
-  dplyr::filter(episode &lt; 2) %&gt;%
-  dplyr::group_by(PatientNo) %&gt;% 
-  dplyr::summarise(blood_collection = min(HAIDate)))</code></pre>
-<pre><code>## # A tibble: 44 x 2
-##    PatientNo blood_collection
-##    &lt;chr&gt;     &lt;date&gt;          
-##  1 003-031   2017-05-03      
-##  2 003-066   2017-09-21      
-##  3 003-148   2018-11-15      
-##  4 003-155   2018-12-17      
-##  5 003-504   2016-12-02      
-##  6 003-508   2016-12-17      
-##  7 003-510   2016-12-15      
-##  8 003-511   2016-12-21      
-##  9 003-514   2016-12-31      
-## 10 003-516   2016-12-31      
-## # … with 34 more rows</code></pre>
+<div id="redefining-micbld-and-daily1n2" class="section level2">
+<h2>Redefining MICBLD and DAILY1n2</h2>
+<p>The <code>MICBLD</code> and <code>DAILY1n2</code> data sets have several rows per patient. Here we compute summaries of these data sets with one row per patient so that they can easily be merge with the other data sets.</p>
+<pre class="r"><code>(micbld &lt;- lapply(list(function(x) x %&gt;% # this function should be first
+                         dplyr::group_by(PatientNo) %&gt;% 
+                         dplyr::summarise(bsi = any(OrganismsNo &gt; 0)),
+                       function(x) x %&gt;% 
+                         dplyr::filter(episode &lt; 2) %&gt;% # blood collection of first episode
+                         dplyr::group_by(PatientNo) %&gt;% 
+                         dplyr::summarise(blood_collection = min(HAIDate))),
+                  function(f) f(data$MICBLD)) %&gt;% 
+   purrr::reduce(leftjoin))</code></pre>
+<pre><code>## # A tibble: 216 x 3
+##    PatientNo bsi   blood_collection
+##    &lt;chr&gt;     &lt;lgl&gt; &lt;date&gt;          
+##  1 003-003   NA    NA              
+##  2 003-006   NA    NA              
+##  3 003-008   NA    NA              
+##  4 003-010   NA    NA              
+##  5 003-011   NA    NA              
+##  6 003-013   NA    NA              
+##  7 003-015   NA    NA              
+##  8 003-016   NA    NA              
+##  9 003-017   NA    NA              
+## 10 003-018   NA    NA              
+## # … with 206 more rows</code></pre>
+<div id="the-daily1n2-data-set" class="section level3">
+<h3>The DAILY1n2 data set</h3>
+<p>The following function tells, for one data frame of one patient, where there are two consecutive dates:</p>
+<pre class="r"><code>two_consecutive &lt;- function(x, name) {
+  x %&gt;% 
+    dplyr::arrange(VSDate) %&gt;% 
+    purrr::pluck(&quot;VSDate&quot;) %&gt;% 
+    diff() %&gt;% 
+    `&lt;`(2) %&gt;% 
+    any() %&gt;% 
+    tibble::enframe(name = NULL, value = name)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>data$DAILY1n2 %&gt;% 
+  dplyr::filter(PatientNo == &quot;003-001&quot;) %&gt;% 
+  dplyr::select(PatientNo, VSDate, CVCCount) %&gt;% 
+  print() %&gt;% 
+  two_consecutive(&quot;name&quot;)</code></pre>
+<pre><code>## # A tibble: 4 x 3
+##   PatientNo VSDate     CVCCount
+##   &lt;chr&gt;     &lt;date&gt;        &lt;dbl&gt;
+## 1 003-001   2016-11-12       NA
+## 2 003-001   2016-11-13       NA
+## 3 003-001   2016-11-14       NA
+## 4 003-001   2016-11-15       NA</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   name 
+##   &lt;lgl&gt;
+## 1 TRUE</code></pre>
+<p>and</p>
+<pre class="r"><code>data$DAILY1n2 %&gt;% 
+  dplyr::filter(PatientNo == &quot;003-002&quot;) %&gt;% 
+  dplyr::select(PatientNo, VSDate, CVCCount) %&gt;% 
+  print() %&gt;% 
+  two_consecutive(&quot;name&quot;)</code></pre>
+<pre><code>## # A tibble: 5 x 3
+##   PatientNo VSDate     CVCCount
+##   &lt;chr&gt;     &lt;date&gt;        &lt;dbl&gt;
+## 1 003-002   2016-11-14        1
+## 2 003-002   2016-11-15        1
+## 3 003-002   2016-11-16        1
+## 4 003-002   2016-11-17        1
+## 5 003-002   2016-11-18        1</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   name 
+##   &lt;lgl&gt;
+## 1 TRUE</code></pre>
+<p>List of functions:</p>
+<pre class="r"><code>lfcts &lt;- list(
+  clbsi_risk = function(df, name) { # difference
+    require(magrittr)
+    df %&gt;% 
+      split(.$PatientNo) %&gt;% 
+      lapply(function(x) x %&gt;% 
+        dplyr::filter(CVCCount &gt; 0) %&gt;% # difference
+        two_consecutive(name)) %&gt;% 
+      bindrows()
+  },
+  
+  al_bsi_risk = function(df, name) { # difference
+    require(magrittr)
+    df %&gt;% 
+      split(.$PatientNo) %&gt;% 
+      lapply(function(x) x %&gt;% 
+        dplyr::filter(Arterial == &quot;Yes&quot;) %&gt;% # difference
+        two_consecutive(name)) %&gt;% 
+      bindrows()
+  },
+  
+  clbsi = function(df, name) { # difference
+    require(magrittr)
+    df %&gt;% 
+      leftjoin(micbld) %&gt;% 
+      split(.$PatientNo) %&gt;% 
+      lapply(function(x) x %&gt;% 
+               dplyr::filter(CVCCount &gt; 0) %&gt;% # difference
+               dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;% 
+               two_consecutive(name)) %&gt;% 
+      bindrows()
+  },
+  
+  al_bsi = function(df, name) { # difference
+    require(magrittr)
+    df %&gt;% 
+      leftjoin(micbld) %&gt;% 
+      split(.$PatientNo) %&gt;% 
+      lapply(function(x) x %&gt;% 
+               dplyr::filter(Arterial == &quot;Yes&quot;) %&gt;% # difference
+               dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;% 
+               two_consecutive(name)) %&gt;% 
+      bindrows()
+  })</code></pre>
+<p>Applying to <code>data$DAILY1n2</code>:</p>
+<pre class="r"><code>(daily &lt;- purrr::map2(lfcts, names(lfcts), function(f, x) f(data$DAILY1n2, x)) %&gt;% 
+  purrr::reduce(leftjoin))</code></pre>
+<pre><code>## # A tibble: 593 x 5
+##    PatientNo clbsi_risk al_bsi_risk clbsi al_bsi
+##    &lt;chr&gt;     &lt;lgl&gt;      &lt;lgl&gt;       &lt;lgl&gt; &lt;lgl&gt; 
+##  1 003-001   FALSE      FALSE       FALSE FALSE 
+##  2 003-002   TRUE       TRUE        FALSE FALSE 
+##  3 003-003   TRUE       FALSE       FALSE FALSE 
+##  4 003-004   TRUE       TRUE        FALSE FALSE 
+##  5 003-005   TRUE       TRUE        FALSE FALSE 
+##  6 003-006   TRUE       TRUE        FALSE FALSE 
+##  7 003-007   TRUE       TRUE        FALSE FALSE 
+##  8 003-008   FALSE      FALSE       FALSE FALSE 
+##  9 003-009   FALSE      FALSE       FALSE FALSE 
+## 10 003-010   FALSE      FALSE       FALSE FALSE 
+## # … with 583 more rows</code></pre>
+</div>
 </div>
 <div id="defining-populations-groups" class="section level2">
 <h2>Defining populations / groups</h2>
-<p>The code below defines the variables of interest. Note that the data sets <code>MICBLD</code> and <code>DAILY1n2</code> are managed differently than the data sets <code>FINISH</code>, <code>ENR</code>, <code>ADM</code> and <code>AIR</code> because they do not have one row per patient.</p>
+<p>The code below defines the variables of interest.</p>
 <pre class="r"><code>data2 &lt;- data$FINISH %&gt;%
-  dplyr::select(PatientNo, IsCompleted, IsAgree, HosDate) %&gt;% 
+  dplyr::select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate) %&gt;% 
   leftjoin(dplyr::select(data$ENR, PatientNo, Age, RandDate, YOB, Sex)) %&gt;%
-  leftjoin(dplyr::select(data$ADM, PatientNo, Source, NKQ, HospitalDate, Mode, CongIV, Seve, AIDS, Elective, Emergency)) %&gt;%
+  leftjoin(dplyr::select(data$ADM, PatientNo, Source, NKQ, HospitalDate, Mode, CongIV, Seve, AIDS, Elective, Emergency,
+                         Tetanus, Pneumonia, Sepsis, Septic, CNS, COPD, CVA, Myo, SpOther, DiaCo, DiaDa)) %&gt;%
   leftjoin(dplyr::select(data$AIR, PatientNo, IsTrach)) %&gt;%
+  leftjoin(dplyr::select(micbld, -blood_collection)) %&gt;% 
+  leftjoin(daily) %&gt;% 
   
 # exclude patients not completed and not agreed --------------------------------
   dplyr::filter(!(IsCompleted == 2 &amp; IsAgree != &quot;Yes&quot;)) %&gt;% 
-  
-# define BSI variable ----------------------------------------------------------
-  dplyr::left_join(dplyr::filter(data$MICBLD, OrganismsNo &gt; 0) %&gt;% 
-                     purrr::pluck(&quot;PatientNo&quot;) %&gt;% 
-                     unique() %&gt;% 
-                     tibble::tibble(PatientNo = ., bsi = TRUE), &quot;PatientNo&quot;) %&gt;% 
-  dplyr::mutate(bsi = tidyr::replace_na(bsi, FALSE)) %&gt;%  # replace NA with FALSE
-  
-# define patients at risk of CLBSI ---------------------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% # similar to AL BSI
-                     dplyr::group_by(PatientNo) %&gt;%  # same as for AL BSI
-                     dplyr::summarise(clbsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to AL BSI
-  dplyr::mutate(clbsi_risk = tidyr::replace_na(clbsi_risk, FALSE)) %&gt;%  # replace NA with FALSE, similar to AL BSI
-  
-# define CLBSI -----------------------------------------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, CVCCount &gt; 0) %&gt;% # similar to AL BSI
-                     dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for AL BSI
-                     dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for AL BSI
-                     dplyr::group_by(PatientNo) %&gt;%                    # same as for AL BSI
-                     dplyr::summarise(clbsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to AL BSI
-  dplyr::mutate(clbsi = tidyr::replace_na(clbsi, FALSE)) %&gt;%  # replace NA with FALSE, similar to AL BSI
-  
-# define patients at risk of arterial line BSI ---------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% # similar to CLBSI
-                     dplyr::group_by(PatientNo) %&gt;% # same as for CLBSI
-                     dplyr::summarise(al_bsi_risk = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to CLBSI
-  dplyr::mutate(al_bsi_risk = tidyr::replace_na(al_bsi_risk, FALSE)) %&gt;%  # replace NA with FALSE, similar to CLBSI
-  
-# define patients with arterial line BSI ---------------------------------------
-  dplyr::left_join(dplyr::filter(data$DAILY1n2, Arterial == &quot;Yes&quot;) %&gt;% # similar to CLBSI
-                     dplyr::left_join(first_episodes, &quot;PatientNo&quot;) %&gt;% # same as for CLBSI
-                     dplyr::filter(blood_collection - VSDate &lt; 6) %&gt;%  # same as for CLBSI
-                     dplyr::group_by(PatientNo) %&gt;%                    # same as for CLBSI
-                     dplyr::summarise(al_bsi = any(diff(VSDate) &lt; 2)), &quot;PatientNo&quot;) %&gt;% # similar to CLBSI
-  dplyr::mutate(al_bsi = tidyr::replace_na(al_bsi, FALSE),  # replace NA with FALSE, similar to CLBSI
-    
+
+# replace NA with FALSE --------------------------------------------------------  
+  dplyr::mutate_at(c(&quot;bsi&quot;, &quot;clbsi_risk&quot;, &quot;clbsi&quot;, &quot;al_bsi_risk&quot;, &quot;al_bsi&quot;), tidyr::replace_na, FALSE) %&gt;% 
+
+  dplyr::mutate(
 # define HABSI variable --------------------------------------------------------
     habsi = tidyr::replace_na(HosDate - HospitalDate &gt; 1, FALSE), # replace NA with FALSE
     
@@ -598,17 +686,35 @@ if (length(to_install)) install.packages(to_install)</code></pre>
                              `103` = &quot;BVTV&quot;),
 
 # any tracheostomy -------------------------------------------------------------
-#    tracheo  = ifelse(NKQ &lt; 2 | IsTrach == &quot;Yes&quot;, &quot;tracheostomy&quot;, &quot;no tracheostomy&quot;),
-    tracheo  = NKQ &lt; 2 | IsTrach == &quot;Yes&quot;,
+    tracheo = NKQ &lt; 2 | dplyr::na_if(IsTrach, &quot;NA&quot;) == &quot;Yes&quot;,
 
 # define tracheostomy vs month -------------------------------------------------
-    nkq      = c(&quot;tracheostomy&quot;, &quot;mouth&quot;)[NKQ],
+    nkq = c(&quot;tracheostomy&quot;, &quot;mouth&quot;)[NKQ],
 
 # computing age ----------------------------------------------------------------
-    age      = ifelse(is.na(Age), round(as.numeric(RandDate - lubridate::ymd(paste(YOB, &quot;0101&quot;))) / 365), Age)) %&gt;%  # maybe we should consider 1st of July instead?
+    age = ifelse(is.na(Age), round(as.numeric(RandDate - lubridate::ymd(paste(YOB, &quot;0101&quot;))) / 365), Age),  # maybe we should consider 1st of July instead?
+  
+# other pathogens:
+    otherpth = ! is.na(SpOther), 
+
+# durations:
+    rand2icu = ICUDate - RandDate,
+    rand2hos = HosDate - RandDate,
+    adm2icu  = ICUDate - HospitalDate,
+    adm2hos  = HosDate - HospitalDate,
+
+# patient-days: 
+    patdayRand = sum(ICUDate - RandDate),
+    patdayHosp = sum(HosDate - RandDate),
+
+# at least one catheter:
+    
+  
+# sepsis:
+    sepsis = Sepsis | Septic) %&gt;% 
   
 # selecting variables of interest ----------------------------------------------
-  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB)</code></pre>
+  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB, -SpOther, -IsTrach, -NKQ, -Sepsis, -Septic, -ICUDate)</code></pre>
 <p><strong>Note:</strong> nothing to worry about the parsing failure. It concerns <code>NA</code> in the <code>YOB</code> variable that is not used anyway.</p>
 </div>
 <div id="apache-ii-scores" class="section level2">
@@ -712,32 +818,33 @@ if (length(to_install)) install.packages(to_install)</code></pre>
                 creatinine_score, hematocrit_score, wbc_score, gcs_score, age_score, c_score, apache) %&gt;% 
   dplyr::filter(is.na(apache)) %&gt;% 
   print(n = 23)</code></pre>
-<pre><code>## # A tibble: 23 x 18
+<pre><code>## # A tibble: 45 x 18
 ##    PatientNo TempMin TempMax temp_score map_score hr_score rr_score a_score ph_score na_score k_score creatinine_score hematocrit_score wbc_score gcs_score age_score c_score apache
 ##    &lt;chr&gt;       &lt;dbl&gt;   &lt;dbl&gt;      &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;   &lt;int&gt;    &lt;dbl&gt;    &lt;int&gt;   &lt;dbl&gt;            &lt;dbl&gt;            &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt;  &lt;dbl&gt;
 ##  1 003-020      NA      NA           NA         0        2        1       1        1        0       1                4                0         0         6         0       0     NA
 ##  2 003-030      37.6    38.5          1         2        2        1       0        0        0      NA                4                0         2         0         2       0     NA
-##  3 003-088      NA      NA           NA         2        3        1       1        1        2       0                4                2         0         7         0       5     NA
-##  4 003-583      37      37.4          0         3        0        1      NA       NA        0       1                4                0         0         0         2       0     NA
-##  5 003-637      NA      NA           NA         0        0        1       2        0        0       2                4                0         2         0         6       0     NA
-##  6 020-007      NA      NA           NA         2        2        1       1        2        0       0                4                2         2         0         0       0     NA
-##  7 020-031      36      37.2          0         0        0        0      NA        0        0       0                4                0         1         3         3       0     NA
-##  8 020-032      36.5    37.5          0         2        2        1       1        0        0       0                4               NA        NA         6         0       0     NA
-##  9 020-043      NA      NA           NA         2        0        1       1        0        0       0                4                0         0         0         6       0     NA
-## 10 020-047      NA      NA           NA         0        2        1       1        1        0       0                4                2         0        NA         6       0     NA
-## 11 020-086      37      37.3          0         0        0        0       3        3       NA      NA               NA               NA        NA         7         5       0     NA
-## 12 020-088      37      37.2          0         0        2        1      NA        1        0       1                4                2         0         1         6       0     NA
-## 13 020-098      37      39            3         0        2        1       1        0        0       1                4                0         0        NA         0       0     NA
-## 14 020-108      35      37.9          1         0        2        0       1        3        0       0                4                2         1        NA         2       0     NA
-## 15 020-509      37.1    37.7          0         0        2        1       1        0        0       1                4                1         0        NA         3       0     NA
-## 16 020-511      36.2    37.5          0         0        0        1      NA        0        0       1                4                0         0         0         6       0     NA
-## 17 103-016      NA      NA           NA         0        2        1       1        3        0       0                4                0         0         0         2       5     NA
-## 18 103-020      NA      NA           NA         0        2        1       2        1        0       0                4                2         2         6         6       0     NA
-## 19 103-037      NA      NA           NA         0        2        1       1        2        0       0                4                2         0         0         6       0     NA
-## 20 103-049      NA      NA           NA         0        2        1       1        0        0       0                4                0         1         0         0       0     NA
-## 21 103-051      NA      NA           NA         4        0        1       1        0        0       0                4                0         2         9         0       0     NA
-## 22 103-059      NA      NA           NA         0        3        1       3        0        0       4                4                4         2         0         0       0     NA
-## 23 103-075      NA      NA           NA         0        2        1       1        1        0       1                4                2         0         3         6       0     NA</code></pre>
+##  3 003-068      37      37.3          0         2        2        1       1        0        0       1                4                0         1        12         5      NA     NA
+##  4 003-088      NA      NA           NA         2        3        1       1        1        2       0                4                2         0         7         0       5     NA
+##  5 003-094      38      40.5          3         2        2        1       0        1        0       1                4                0         0         8         0      NA     NA
+##  6 003-106      37      37.5          0         0        2        1       1        3        0       1                4                2         0         0         5      NA     NA
+##  7 003-118      38.5    39.5          3         2        0        1       1        1        0       0                4                2         2         7         2      NA     NA
+##  8 003-128      38      39            3         0        2        1       1        0        0       2                4                0         0         4         0      NA     NA
+##  9 003-139      37.2    39            3         2        2        1       1        0        0       0                4                1         0         4         3      NA     NA
+## 10 003-583      37      37.4          0         3        0        1      NA       NA        0       1                4                0         0         0         2       0     NA
+## 11 003-637      NA      NA           NA         0        0        1       2        0        0       2                4                0         2         0         6       0     NA
+## 12 020-007      NA      NA           NA         2        2        1       1        2        0       0                4                2         2         0         0       0     NA
+## 13 020-031      36      37.2          0         0        0        0      NA        0        0       0                4                0         1         3         3       0     NA
+## 14 020-032      36.5    37.5          0         2        2        1       1        0        0       0                4               NA        NA         6         0       0     NA
+## 15 020-038      37      37.5          0         0        2        1       1        0        2       1                4                0         1         0         6      NA     NA
+## 16 020-043      NA      NA           NA         2        0        1       1        0        0       0                4                0         0         0         6       0     NA
+## 17 020-047      NA      NA           NA         0        2        1       1        1        0       0                4                2         0        NA         6       0     NA
+## 18 020-086      37      37.3          0         0        0        0       3        3       NA      NA               NA               NA        NA         7         5       0     NA
+## 19 020-088      37      37.2          0         0        2        1      NA        1        0       1                4                2         0         1         6       0     NA
+## 20 020-098      37      39            3         0        2        1       1        0        0       1                4                0         0        NA         0       0     NA
+## 21 020-108      35      37.9          1         0        2        0       1        3        0       0                4                2         1        NA         2       0     NA
+## 22 020-509      37.1    37.7          0         0        2        1       1        0        0       1                4                1         0        NA         3       0     NA
+## 23 020-511      36.2    37.5          0         0        0        1      NA        0        0       1                4                0         0         0         6       0     NA
+## # … with 22 more rows</code></pre>
 <p>As we can see above, some scores are <code>NA</code>. We need to think about how to deal with that.</p>
 </div>
 <div id="table-1-demographics" class="section level2">
@@ -768,12 +875,17 @@ if (length(to_install)) install.packages(to_install)</code></pre>
     tidyr::pivot_wider(names_from = x, values_from = y)
 }</code></pre>
 <p>Some recoding of variables:</p>
-<pre class="r"><code>data3 &lt;- data2 %&gt;% 
-  dplyr::mutate(tracheo = dplyr::recode(as.character(tracheo),
-                                        `TRUE`  = &quot;tracheostomy&quot;,
-                                        `FALSE` = &quot;no tracheostomy&quot;))</code></pre>
-<pre class="r"><code>for(v in c(&quot;habsi&quot;, &quot;bsi&quot;, &quot;clbsi_risk&quot;, &quot;clbsi&quot;, &quot;al_bsi_risk&quot;, &quot;al_bsi&quot;)) {
-  for (g in c(&quot;hospital&quot;, &quot;Sex&quot;, &quot;Source&quot;, &quot;nkq&quot;, &quot;tracheo&quot;)) print(f1(v, g, data3))
+<pre class="r"><code>recoding &lt;- function(df, var) {
+  for (i in var)
+    df[, i] &lt;- dplyr::recode(as.character(unlist(df[, i])), `TRUE` = i, `FALSE` = paste(&quot;no&quot;, i))
+  df
+}</code></pre>
+<pre class="r"><code>data3 &lt;- recoding(data2, c(&quot;tracheo&quot;, &quot;clbsi_risk&quot;, &quot;al_bsi_risk&quot;, &quot;Tetanus&quot;, &quot;Pneumonia&quot;, &quot;sepsis&quot;,
+                           &quot;CNS&quot;, &quot;COPD&quot;, &quot;CVA&quot;, &quot;Myo&quot;, &quot;otherpth&quot;, &quot;Mode&quot;))</code></pre>
+<pre class="r"><code>for(v in c(&quot;habsi&quot;, &quot;bsi&quot;, &quot;clbsi&quot;, &quot;al_bsi&quot;)) {
+  for (g in c(&quot;hospital&quot;, &quot;Sex&quot;, &quot;Source&quot;, &quot;nkq&quot;, &quot;tracheo&quot;, &quot;clbsi_risk&quot;, &quot;al_bsi_risk&quot;, &quot;Tetanus&quot;,
+              &quot;Pneumonia&quot;, &quot;sepsis&quot;, &quot;CNS&quot;, &quot;COPD&quot;, &quot;CVA&quot;, &quot;Myo&quot;, &quot;otherpth&quot;, &quot;Mode&quot;))
+    print(f1(v, g, data3))
 }</code></pre>
 <pre><code>## # A tibble: 3 x 3
 ##   y     `with HABSI` `without HABSI`
@@ -797,11 +909,68 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 1 mouth                 140             304
 ## 2 tracheostomy          120              33
 ## # A tibble: 3 x 3
-##   y               `with HABSI` `without HABSI`
-##   &lt;chr&gt;                  &lt;int&gt;           &lt;int&gt;
-## 1 no tracheostomy          113             201
-## 2 tracheostomy             146             136
-## 3 &lt;NA&gt;                       1              NA
+##   y          `with HABSI` `without HABSI`
+##   &lt;chr&gt;             &lt;int&gt;           &lt;int&gt;
+## 1 no tracheo          113             199
+## 2 tracheo             146             136
+## 3 &lt;NA&gt;                  1               2
+## # A tibble: 2 x 3
+##   y             `with HABSI` `without HABSI`
+##   &lt;chr&gt;                &lt;int&gt;           &lt;int&gt;
+## 1 clbsi_risk              99             222
+## 2 no clbsi_risk          161             115
+## # A tibble: 2 x 3
+##   y              `with HABSI` `without HABSI`
+##   &lt;chr&gt;                 &lt;int&gt;           &lt;int&gt;
+## 1 al_bsi_risk              85              70
+## 2 no al_bsi_risk          175             267
+## # A tibble: 2 x 3
+##   y          `with HABSI` `without HABSI`
+##   &lt;chr&gt;             &lt;int&gt;           &lt;int&gt;
+## 1 no Tetanus          136             281
+## 2 Tetanus             124              56
+## # A tibble: 2 x 3
+##   y            `with HABSI` `without HABSI`
+##   &lt;chr&gt;               &lt;int&gt;           &lt;int&gt;
+## 1 no Pneumonia          198             229
+## 2 Pneumonia              62             108
+## # A tibble: 2 x 3
+##   y         `with HABSI` `without HABSI`
+##   &lt;chr&gt;            &lt;int&gt;           &lt;int&gt;
+## 1 no sepsis          218             235
+## 2 sepsis              42             102
+## # A tibble: 2 x 3
+##   y      `with HABSI` `without HABSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 CNS              33              96
+## 2 no CNS          227             241
+## # A tibble: 2 x 3
+##   y       `with HABSI` `without HABSI`
+##   &lt;chr&gt;          &lt;int&gt;           &lt;int&gt;
+## 1 COPD               6               4
+## 2 no COPD          254             333
+## # A tibble: 2 x 3
+##   y      `with HABSI` `without HABSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 CVA               3               6
+## 2 no CVA          257             331
+## # A tibble: 3 x 3
+##   y      `with HABSI` `without HABSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 Myo              14              13
+## 2 no Myo          245             320
+## 3 &lt;NA&gt;              1               4
+## # A tibble: 2 x 3
+##   y           `with HABSI` `without HABSI`
+##   &lt;chr&gt;              &lt;int&gt;           &lt;int&gt;
+## 1 no otherpth          232             299
+## 2 otherpth              28              38
+## # A tibble: 3 x 3
+##   y       `with HABSI` `without HABSI`
+##   &lt;chr&gt;          &lt;int&gt;           &lt;int&gt;
+## 1 Mode               9               7
+## 2 no Mode          246             321
+## 3 &lt;NA&gt;               5               9
 ## # A tibble: 3 x 3
 ##   y     `with BSI` `without BSI`
 ##   &lt;chr&gt;      &lt;int&gt;         &lt;int&gt;
@@ -824,38 +993,68 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 1 mouth                25           419
 ## 2 tracheostomy         19           134
 ## # A tibble: 3 x 3
-##   y               `with BSI` `without BSI`
-##   &lt;chr&gt;                &lt;int&gt;         &lt;int&gt;
-## 1 no tracheostomy          8           306
-## 2 tracheostomy            36           246
-## 3 &lt;NA&gt;                    NA             1
+##   y          `with BSI` `without BSI`
+##   &lt;chr&gt;           &lt;int&gt;         &lt;int&gt;
+## 1 no tracheo          8           304
+## 2 tracheo            36           246
+## 3 &lt;NA&gt;               NA             3
+## # A tibble: 2 x 3
+##   y             `with BSI` `without BSI`
+##   &lt;chr&gt;              &lt;int&gt;         &lt;int&gt;
+## 1 clbsi_risk            33           288
+## 2 no clbsi_risk         11           265
+## # A tibble: 2 x 3
+##   y              `with BSI` `without BSI`
+##   &lt;chr&gt;               &lt;int&gt;         &lt;int&gt;
+## 1 al_bsi_risk            22           133
+## 2 no al_bsi_risk         22           420
+## # A tibble: 2 x 3
+##   y          `with BSI` `without BSI`
+##   &lt;chr&gt;           &lt;int&gt;         &lt;int&gt;
+## 1 no Tetanus         22           395
+## 2 Tetanus            22           158
+## # A tibble: 2 x 3
+##   y            `with BSI` `without BSI`
+##   &lt;chr&gt;             &lt;int&gt;         &lt;int&gt;
+## 1 no Pneumonia         36           391
+## 2 Pneumonia             8           162
+## # A tibble: 2 x 3
+##   y         `with BSI` `without BSI`
+##   &lt;chr&gt;          &lt;int&gt;         &lt;int&gt;
+## 1 no sepsis         38           415
+## 2 sepsis             6           138
+## # A tibble: 2 x 3
+##   y      `with BSI` `without BSI`
+##   &lt;chr&gt;       &lt;int&gt;         &lt;int&gt;
+## 1 CNS             5           124
+## 2 no CNS         39           429
+## # A tibble: 2 x 3
+##   y       `without BSI` `with BSI`
+##   &lt;chr&gt;           &lt;int&gt;      &lt;int&gt;
+## 1 COPD               10         NA
+## 2 no COPD           543         44
+## # A tibble: 2 x 3
+##   y      `without BSI` `with BSI`
+##   &lt;chr&gt;          &lt;int&gt;      &lt;int&gt;
+## 1 CVA                9         NA
+## 2 no CVA           544         44
 ## # A tibble: 3 x 3
-##   y     `with CLBSI_RISK` `without CLBSI_RISK`
-##   &lt;chr&gt;             &lt;int&gt;                &lt;int&gt;
-## 1 BVTV                 68                   67
-## 2 HTD                 132                  165
-## 3 NHTD                121                   44
+##   y      `with BSI` `without BSI`
+##   &lt;chr&gt;       &lt;int&gt;         &lt;int&gt;
+## 1 Myo             1            26
+## 2 no Myo         43           522
+## 3 &lt;NA&gt;           NA             5
 ## # A tibble: 2 x 3
-##   y      `with CLBSI_RISK` `without CLBSI_RISK`
-##   &lt;chr&gt;              &lt;int&gt;                &lt;int&gt;
-## 1 Female               107                   77
-## 2 Male                 214                  199
-## # A tibble: 2 x 3
-##   y              `with CLBSI_RISK` `without CLBSI_RISK`
-##   &lt;chr&gt;                      &lt;int&gt;                &lt;int&gt;
-## 1 Community                     91                   80
-## 2 Other hospital               230                  196
-## # A tibble: 2 x 3
-##   y            `with CLBSI_RISK` `without CLBSI_RISK`
-##   &lt;chr&gt;                    &lt;int&gt;                &lt;int&gt;
-## 1 mouth                      253                  191
-## 2 tracheostomy                68                   85
+##   y           `with BSI` `without BSI`
+##   &lt;chr&gt;            &lt;int&gt;         &lt;int&gt;
+## 1 no otherpth         42           489
+## 2 otherpth             2            64
 ## # A tibble: 3 x 3
-##   y               `with CLBSI_RISK` `without CLBSI_RISK`
-##   &lt;chr&gt;                       &lt;int&gt;                &lt;int&gt;
-## 1 no tracheostomy               168                  146
-## 2 tracheostomy                  152                  130
-## 3 &lt;NA&gt;                            1                   NA
+##   y       `with BSI` `without BSI`
+##   &lt;chr&gt;        &lt;int&gt;         &lt;int&gt;
+## 1 Mode             2            14
+## 2 no Mode         42           525
+## 3 &lt;NA&gt;            NA            14
 ## # A tibble: 3 x 3
 ##   y     `with CLBSI` `without CLBSI`
 ##   &lt;chr&gt;        &lt;int&gt;           &lt;int&gt;
@@ -878,38 +1077,68 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 1 mouth                  21             423
 ## 2 tracheostomy           10             143
 ## # A tibble: 3 x 3
-##   y               `with CLBSI` `without CLBSI`
-##   &lt;chr&gt;                  &lt;int&gt;           &lt;int&gt;
-## 1 no tracheostomy            8             306
-## 2 tracheostomy              23             259
-## 3 &lt;NA&gt;                      NA               1
+##   y          `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;             &lt;int&gt;           &lt;int&gt;
+## 1 no tracheo            8             304
+## 2 tracheo              23             259
+## 3 &lt;NA&gt;                 NA               3
+## # A tibble: 2 x 3
+##   y             `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;                &lt;int&gt;           &lt;int&gt;
+## 1 clbsi_risk              31             290
+## 2 no clbsi_risk           NA             276
+## # A tibble: 2 x 3
+##   y              `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;                 &lt;int&gt;           &lt;int&gt;
+## 1 al_bsi_risk              15             140
+## 2 no al_bsi_risk           16             426
+## # A tibble: 2 x 3
+##   y          `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;             &lt;int&gt;           &lt;int&gt;
+## 1 no Tetanus           19             398
+## 2 Tetanus              12             168
+## # A tibble: 2 x 3
+##   y            `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;               &lt;int&gt;           &lt;int&gt;
+## 1 no Pneumonia           23             404
+## 2 Pneumonia               8             162
+## # A tibble: 2 x 3
+##   y         `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;            &lt;int&gt;           &lt;int&gt;
+## 1 no sepsis           25             428
+## 2 sepsis               6             138
+## # A tibble: 2 x 3
+##   y      `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 CNS               3             126
+## 2 no CNS           28             440
+## # A tibble: 2 x 3
+##   y       `without CLBSI` `with CLBSI`
+##   &lt;chr&gt;             &lt;int&gt;        &lt;int&gt;
+## 1 COPD                 10           NA
+## 2 no COPD             556           31
+## # A tibble: 2 x 3
+##   y      `without CLBSI` `with CLBSI`
+##   &lt;chr&gt;            &lt;int&gt;        &lt;int&gt;
+## 1 CVA                  9           NA
+## 2 no CVA             557           31
 ## # A tibble: 3 x 3
-##   y     `with AL_BSI_RISK` `without AL_BSI_RISK`
-##   &lt;chr&gt;              &lt;int&gt;                 &lt;int&gt;
-## 1 BVTV                   1                   134
-## 2 HTD                  130                   167
-## 3 NHTD                  24                   141
+##   y      `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;         &lt;int&gt;           &lt;int&gt;
+## 1 Myo               1              26
+## 2 no Myo           30             535
+## 3 &lt;NA&gt;             NA               5
 ## # A tibble: 2 x 3
-##   y      `with AL_BSI_RISK` `without AL_BSI_RISK`
-##   &lt;chr&gt;               &lt;int&gt;                 &lt;int&gt;
-## 1 Female                 43                   141
-## 2 Male                  112                   301
-## # A tibble: 2 x 3
-##   y              `with AL_BSI_RISK` `without AL_BSI_RISK`
-##   &lt;chr&gt;                       &lt;int&gt;                 &lt;int&gt;
-## 1 Community                      36                   135
-## 2 Other hospital                119                   307
-## # A tibble: 2 x 3
-##   y            `with AL_BSI_RISK` `without AL_BSI_RISK`
-##   &lt;chr&gt;                     &lt;int&gt;                 &lt;int&gt;
-## 1 mouth                        87                   357
-## 2 tracheostomy                 68                    85
+##   y           `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;              &lt;int&gt;           &lt;int&gt;
+## 1 no otherpth           30             501
+## 2 otherpth               1              65
 ## # A tibble: 3 x 3
-##   y               `with AL_BSI_RISK` `without AL_BSI_RISK`
-##   &lt;chr&gt;                        &lt;int&gt;                 &lt;int&gt;
-## 1 no tracheostomy                 57                   257
-## 2 tracheostomy                    98                   184
-## 3 &lt;NA&gt;                            NA                     1
+##   y       `with CLBSI` `without CLBSI`
+##   &lt;chr&gt;          &lt;int&gt;           &lt;int&gt;
+## 1 Mode               2              14
+## 2 no Mode           29             538
+## 3 &lt;NA&gt;              NA              14
 ## # A tibble: 3 x 3
 ##   y     `without AL_BSI` `with AL_BSI`
 ##   &lt;chr&gt;            &lt;int&gt;         &lt;int&gt;
@@ -932,17 +1161,74 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 1 mouth                    6              438
 ## 2 tracheostomy            15              138
 ## # A tibble: 3 x 3
-##   y               `with AL_BSI` `without AL_BSI`
-##   &lt;chr&gt;                   &lt;int&gt;            &lt;int&gt;
-## 1 no tracheostomy             1              313
-## 2 tracheostomy               20              262
-## 3 &lt;NA&gt;                       NA                1</code></pre>
-<pre class="r"><code>f1(&quot;habsi&quot;, &quot;al_bsi_risk&quot;, data3)</code></pre>
+##   y          `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;              &lt;int&gt;            &lt;int&gt;
+## 1 no tracheo             1              311
+## 2 tracheo               20              262
+## 3 &lt;NA&gt;                  NA                3
+## # A tibble: 2 x 3
+##   y             `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;                 &lt;int&gt;            &lt;int&gt;
+## 1 clbsi_risk               15              306
+## 2 no clbsi_risk             6              270
+## # A tibble: 2 x 3
+##   y              `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;                  &lt;int&gt;            &lt;int&gt;
+## 1 al_bsi_risk               21              134
+## 2 no al_bsi_risk            NA              442
+## # A tibble: 2 x 3
+##   y          `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;              &lt;int&gt;            &lt;int&gt;
+## 1 no Tetanus             5              412
+## 2 Tetanus               16              164
+## # A tibble: 2 x 3
+##   y            `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;                &lt;int&gt;            &lt;int&gt;
+## 1 no Pneumonia            19              408
+## 2 Pneumonia                2              168
+## # A tibble: 2 x 3
+##   y         `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;             &lt;int&gt;            &lt;int&gt;
+## 1 no sepsis            18              435
+## 2 sepsis                3              141
+## # A tibble: 2 x 3
+##   y      `without AL_BSI` `with AL_BSI`
+##   &lt;chr&gt;             &lt;int&gt;         &lt;int&gt;
+## 1 CNS                 129            NA
+## 2 no CNS              447            21
+## # A tibble: 2 x 3
+##   y       `without AL_BSI` `with AL_BSI`
+##   &lt;chr&gt;              &lt;int&gt;         &lt;int&gt;
+## 1 COPD                  10            NA
+## 2 no COPD              566            21
+## # A tibble: 2 x 3
+##   y      `without AL_BSI` `with AL_BSI`
+##   &lt;chr&gt;             &lt;int&gt;         &lt;int&gt;
+## 1 CVA                   9            NA
+## 2 no CVA              567            21
+## # A tibble: 3 x 3
+##   y      `without AL_BSI` `with AL_BSI`
+##   &lt;chr&gt;             &lt;int&gt;         &lt;int&gt;
+## 1 Myo                  27            NA
+## 2 no Myo              544            21
+## 3 &lt;NA&gt;                  5            NA
+## # A tibble: 2 x 3
+##   y           `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;               &lt;int&gt;            &lt;int&gt;
+## 1 no otherpth            21              510
+## 2 otherpth               NA               66
+## # A tibble: 3 x 3
+##   y       `with AL_BSI` `without AL_BSI`
+##   &lt;chr&gt;           &lt;int&gt;            &lt;int&gt;
+## 1 Mode                1               15
+## 2 no Mode            20              547
+## 3 &lt;NA&gt;               NA               14</code></pre>
+<pre class="r"><code>f1(&quot;habsi&quot;, &quot;Tetanus&quot;, data3)</code></pre>
 <pre><code>## # A tibble: 2 x 3
-##   y     `with HABSI` `without HABSI`
-##   &lt;lgl&gt;        &lt;int&gt;           &lt;int&gt;
-## 1 FALSE          175             267
-## 2 TRUE            85              70</code></pre>
+##   y          `with HABSI` `without HABSI`
+##   &lt;chr&gt;             &lt;int&gt;           &lt;int&gt;
+## 1 no Tetanus          136             281
+## 2 Tetanus             124              56</code></pre>
 <pre class="r"><code>f2(&quot;habsi&quot;, &quot;age&quot;, data2)</code></pre>
 <pre><code>## # A tibble: 1 x 2
 ##   `with HABSI`    `without HABSI`
