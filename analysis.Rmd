@@ -318,6 +318,14 @@ lfcts <- list(
                dplyr::filter(blood_collection - VSDate < 6) %>% 
                two_consecutive(name)) %>% 
       bindrows()
+  },
+  
+  had_catheter = function(df, name) {
+    require(magrittr)
+    df %>% 
+      group_by(PatientNo) %>% 
+      summarise(catheter = any(CVCCount > 0)) %>% 
+      dplyr::mutate(catheter = tidyr::replace_na(catheter, FALSE))
   })
 ```
 
