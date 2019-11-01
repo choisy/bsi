@@ -659,13 +659,13 @@ recoding <- function(df, var) {
 
 ```{r}
 data3 <- recoding(data2, c("tracheo", "clbsi_risk", "al_bsi_risk", "Tetanus", "Pneumonia", "sepsis",
-                           "CNS", "COPD", "CVA", "Myo", "otherpth", "Mode"))
+                           "CNS", "COPD", "CVA", "Myo", "otherpth", "Mode", "catheter"))
 ```
 
 ```{r}
 for(v in c("habsi", "bsi", "clbsi", "al_bsi")) {
   for (g in c("hospital", "Sex", "Source", "nkq", "tracheo", "clbsi_risk", "al_bsi_risk", "Tetanus",
-              "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpth", "Mode"))
+              "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpth", "Mode", "catheter"))
     print(f1(v, g, data3))
 }
 ```
