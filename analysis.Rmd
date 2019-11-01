@@ -335,9 +335,19 @@ lfcts <- list(
       lapply(function(x) x %>% 
                dplyr::filter(CVCCount > 0) %>% 
                nrow() %>% 
-               tibble::enframe(name = NULL, value = name)) %>% 
+               tibble::enframe(name = NULL, value = "nb_cl_days")) %>% 
       bindrows()
-  })
+  },
+  
+  nb_days_before_bsi = function(df, name) {
+    require(magrittr)
+    df %>% 
+      leftjoin(micbld) %>%
+      group_by(PatientNo) %>% 
+      summarise(nb_days_before_bsi = sum(VSDate < blood_collection))
+    }
+    
+  )
 ```
 
 Applying to `data$DAILY1n2`:
@@ -486,14 +496,14 @@ data2 <- data$FINISH %>%
     patdayRand = sum(ICUDate - RandDate),
     patdayHosp = sum(HosDate - RandDate),
 
-# at least one catheter:
-    
+# row 3, page 5:
+    nb_cl_days = ifelse(bsi, nb_days_before_bsi, nb_cl_days),
   
 # sepsis:
     sepsis = Sepsis | Septic) %>% 
   
 # selecting variables of interest ----------------------------------------------
-  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB, -SpOther, -IsTrach, -NKQ, -Sepsis, -Septic, -ICUDate)
+  dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB, -SpOther, -IsTrach, -NKQ, -Sepsis, -Septic, -ICUDate, -nb_days_before_bsi)
 ```
 
 **Note:** nothing to worry about the parsing failure. It concerns `NA` in the
@@ -691,7 +701,7 @@ f2("habsi", "age", data2)
 
 ```{r}
 for(v in c("habsi", "bsi", "clbsi", "al_bsi")) {
-  c("age", "rand2icu", "rand2hos", "adm2icu", "adm2hos", "patdayRand", "patdayHosp") %>% 
+  c("age", "rand2icu", "rand2hos", "adm2icu", "adm2hos", "patdayRand", "patdayHosp", "nb_cl_days") %>% 
     setNames(purrr::map(., f2, v = v, data = data2), .) %>% 
     dplyr::bind_rows(.id = "variable") %>% 
     print()
