@@ -326,6 +326,17 @@ lfcts <- list(
       group_by(PatientNo) %>% 
       summarise(catheter = any(CVCCount > 0)) %>% 
       dplyr::mutate(catheter = tidyr::replace_na(catheter, FALSE))
+  },
+  
+  nb_cl_days = function(df, name) {
+    require(magrittr)
+    df %>% 
+      split(.$PatientNo) %>% 
+      lapply(function(x) x %>% 
+               dplyr::filter(CVCCount > 0) %>% 
+               nrow() %>% 
+               tibble::enframe(name = NULL, value = name)) %>% 
+      bindrows()
   })
 ```
 
