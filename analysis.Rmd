@@ -323,8 +323,8 @@ lfcts <- list(
   had_catheter = function(df, name) {
     require(magrittr)
     df %>% 
-      group_by(PatientNo) %>% 
-      summarise(catheter = any(CVCCount > 0)) %>% 
+      dplyr::group_by(PatientNo) %>% 
+      dplyr::summarise(catheter = any(CVCCount > 0)) %>% 
       dplyr::mutate(catheter = tidyr::replace_na(catheter, FALSE))
   },
   
@@ -343,8 +343,8 @@ lfcts <- list(
     require(magrittr)
     df %>% 
       leftjoin(micbld) %>%
-      group_by(PatientNo) %>% 
-      summarise(nb_days_before_bsi = sum(VSDate < blood_collection))
+      dplyr::group_by(PatientNo) %>% 
+      dplyr::summarise(nb_days_before_bsi = sum(VSDate < blood_collection))
     }
     
   )
@@ -663,6 +663,23 @@ f2 <- function(v, g, data) {
                   y = .[[g]]) %>%
     dplyr::group_by(x) %>% 
     dplyr::summarize(y = iqr(y)) %>% 
+    dplyr::mutate(x = dplyr::recode(as.character(x), `FALSE` = paste("with", toupper(v)), `TRUE` = paste("without", toupper(v)))) %>% 
+    tidyr::pivot_wider(names_from = x, values_from = y)
+}
+```
+
+```{r}
+f3 <- function(v, g, data) {
+  require(magrittr)
+  prop <- function(x, n) {
+    tmp <- binom.test(x, n)
+    paste0(round(tmp$estimate, 2), " (95% CI: ", paste(round(tmp$conf.int, 2), collapse = " - "), ")")
+  }
+  data2 %>% 
+    dplyr::mutate(x = ! .[[v]],
+                  y = .[[g]]) %>%
+    dplyr::group_by(x) %>% 
+    dplyr::summarize(y = prop(sum(), n())) %>% 
     dplyr::mutate(x = dplyr::recode(as.character(x), `FALSE` = paste("with", toupper(v)), `TRUE` = paste("without", toupper(v)))) %>% 
     tidyr::pivot_wider(names_from = x, values_from = y)
 }
