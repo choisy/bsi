@@ -781,4 +781,30 @@ dplyr::bind_rows(counts("habsi", "hospital", data3),
   print(., n = nrow(.))
 ```
 
+The following function calculates the mean with confidence interval:
 
+```{r}
+mean_ci <- function(x) {
+  m <- lm(x ~ 1)
+  setNames(c(coef(m), confint(m)), c("estimate", "lower", "upper"))
+}
+```
+
+Let's try it:
+
+```{r}
+mean_ci(data2$nb_cl_days)
+```
+
+Page 6, row 3:
+
+```{r}
+data2 %>% 
+  dplyr::select(nb_cl_days) %>%
+  assign("tmp", ., 1) %>% 
+  split(data2$habsi) %>% 
+  c(list(total = tmp)) %>% 
+  lapply(function(x) as.data.frame(matrix(mean_ci(unlist(x)), 1))) %>% 
+  dplyr::bind_rows(.id = "d") %>% 
+  setNames(c("group", "estimate", "lower", "upper"))
+```

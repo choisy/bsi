@@ -1093,6 +1093,28 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 39 adm2hos               30 (IQR: 19-39)      NA (IQR: NA-NA)      30 (IQR: 19-39)     
 ## 40 patdayRand            NA (IQR: NA-NA)      NA (IQR: NA-NA)      NA (IQR: NA-NA)     
 ## 41 patdayHosp            NA (IQR: NA-NA)      NA (IQR: NA-NA)      NA (IQR: NA-NA)</code></pre>
+<p>The following function calculates the mean with confidence interval:</p>
+<pre class="r"><code>mean_ci &lt;- function(x) {
+  m &lt;- lm(x ~ 1)
+  setNames(c(coef(m), confint(m)), c(&quot;estimate&quot;, &quot;lower&quot;, &quot;upper&quot;))
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>mean_ci(data2$nb_cl_days)</code></pre>
+<pre><code>## estimate    lower    upper 
+## 7.028668 6.174029 7.883307</code></pre>
+<p>Page 6, row 3:</p>
+<pre class="r"><code>data2 %&gt;% 
+  dplyr::select(nb_cl_days) %&gt;%
+  assign(&quot;tmp&quot;, ., 1) %&gt;% 
+  split(data2$habsi) %&gt;% 
+  c(list(total = tmp)) %&gt;% 
+  lapply(function(x) as.data.frame(matrix(mean_ci(unlist(x)), 1))) %&gt;% 
+  dplyr::bind_rows(.id = &quot;d&quot;) %&gt;% 
+  setNames(c(&quot;group&quot;, &quot;estimate&quot;, &quot;lower&quot;, &quot;upper&quot;))</code></pre>
+<pre><code>##   group estimate    lower    upper
+## 1 FALSE 8.468468 7.255244 9.681693
+## 2  TRUE 5.184615 4.037570 6.331661
+## 3 total 7.028668 6.174029 7.883307</code></pre>
 </div>
 
 
