@@ -808,3 +808,12 @@ data2 %>%
   dplyr::bind_rows(.id = "d") %>% 
   setNames(c("group", "estimate", "lower", "upper"))
 ```
+
+Page 6, row 4:
+
+```{r}
+data$DAILY1n2 %>%
+  dplyr::group_by(PatientNo) %>%
+  dplyr::summarise(arterial = sum(Arterial == "Yes"))
+```
+

@@ -1115,6 +1115,24 @@ if (length(to_install)) install.packages(to_install)</code></pre>
 ## 1 FALSE 8.468468 7.255244 9.681693
 ## 2  TRUE 5.184615 4.037570 6.331661
 ## 3 total 7.028668 6.174029 7.883307</code></pre>
+<p>Page 6, row 4:</p>
+<pre class="r"><code>data$DAILY1n2 %&gt;%
+  dplyr::group_by(PatientNo) %&gt;%
+  dplyr::summarise(arterial = sum(Arterial == &quot;Yes&quot;))</code></pre>
+<pre><code>## # A tibble: 593 x 2
+##    PatientNo arterial
+##    &lt;chr&gt;        &lt;int&gt;
+##  1 003-001          0
+##  2 003-002          5
+##  3 003-003          0
+##  4 003-004          5
+##  5 003-005          2
+##  6 003-006         20
+##  7 003-007          4
+##  8 003-008          0
+##  9 003-009          1
+## 10 003-010          0
+## # … with 583 more rows</code></pre>
 </div>
 
 
