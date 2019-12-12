@@ -402,8 +402,15 @@ lfcts <- list(
       leftjoin(micbld) %>%
       dplyr::group_by(PatientNo) %>% 
       dplyr::summarise(nb_days_before_bsi = sum(VSDate < blood_collection))
-    }
-    
+    },
+
+# Page 6, row 4:
+  arterial = function(df, name) {
+    require(magrittr)
+    df %>%
+      dplyr::group_by(PatientNo) %>% 
+      dplyr::summarise(arterial = any(Arterial == "Yes"))
+  }
 )
 ```
 
@@ -482,13 +489,18 @@ data2 <- data$FINISH %>%
     nb_cl_days = ifelse(bsi, nb_days_before_bsi, nb_cl_days),
   
 # sepsis:
-    sepsis = Sepsis | Septic) %>% 
+    sepsis = Sepsis | Septic,
+
+# Page 6, last line:
+    a = arterial & bsi,
+) %>% 
   
 # selecting variables of interest ----------------------------------------------
   dplyr::select(-IsCompleted, -IsAgree, -HosDate, -Age, -YOB, -SpOther, -IsTrach, -NKQ, -Sepsis, -Septic, -ICUDate, -nb_days_before_bsi) %>% 
   
 # Replacing Yes/No by TRUE/FALSE -----------------------------------------------
   dplyr::mutate_at(dplyr::vars(CongI_III, Peri, Cere, Deme, Chro, Conn, Peptic, Mild, Hemi, ModeSeve, AnyMa, Meta), function(x) x == "Yes")
+
 ```
 
 **Note:** nothing to worry about the parsing failure. It concerns `NA` in the
@@ -815,5 +827,13 @@ Page 6, row 4:
 data$DAILY1n2 %>%
   dplyr::group_by(PatientNo) %>%
   dplyr::summarise(arterial = sum(Arterial == "Yes"))
+```
+
+## Page 7
+
+### Total number of Arterial line day
+
+```{r}
+
 ```
 

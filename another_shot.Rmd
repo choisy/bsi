@@ -1,0 +1,426 @@
+---
+title: "Another shot"
+csl: the-american-naturalist.csl
+output:
+  html_document:
+    theme: cerulean
+    toc: yes
+  pdf_document:
+    toc: yes
+<!-- bibliography: references.bib -->
+editor_options: 
+  chunk_output_type: console
+---
+
+<!--
+IMAGES:
+Insert them with: ![alt text](image.png)
+You can also resize them if needed: convert image.png -resize 50% image.png
+If you want to center the image, go through HTML code:
+<div style="text-align:center"><img src ="image.png"/></div>
+
+REFERENCES:
+For references: Put all the bibTeX references in the file "references.bib"
+in the current folder and cite the references as @key or [@key] in the text.
+Uncomment the bibliography field in the above header and put a "References"
+title wherever you want to display the reference list.
+-->
+
+<style type="text/css">
+.main-container {
+  max-width: 1370px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r general options, include = FALSE}
+knitr::knit_hooks$set(
+  margin = function(before, options, envir) {
+    if (before) par(mgp = c(1.5, .5, 0), bty = "n", plt = c(.105, .97, .13, .97))
+    else NULL
+  },
+  prompt = function(before, options, envir) {
+    options(prompt = if (options$engine %in% c("sh", "bash")) "$ " else "> ")
+  })
+
+knitr::opts_chunk$set(margin = TRUE, prompt = TRUE, comment = "",
+                      collapse = TRUE, cache = FALSE, autodep = TRUE,
+                      dev.args = list(pointsize = 11), fig.height = 3.5,
+                      fig.width = 4.24725, fig.retina = 2, fig.align = "center")
+
+options(width = 137)
+```
+
+## Packages
+
+Installing the required packages:
+
+```{r}
+required <- c("dplyr", "lubridate", "magrittr", "purrr", "readxl", "tibble", "tidyr")
+to_install <- setdiff(required, row.names(installed.packages()))
+if (length(to_install)) install.packages(to_install)
+```
+
+Loading `magrittr` for interactive use:
+
+```{r, message = FALSE}
+library(magrittr)
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(lubridate)
+```
+
+## Reading data
+
+The data are in this file:
+
+```{r}
+data_file <- "19-8-2019-CTU16HN_Data.xls.xlsx"
+```
+
+The list of sheets that we are interested in:
+
+```{r}
+sheets <- c("ADM", "AIR", "APAC", "DAILY1n2", "ENR", "FINISH", "FU", "FU_DAY90", "MICBLD")
+```
+
+Reading all the sheets of this file and transforming the dates:
+
+```{r warning = FALSE}
+data <- sheets %>%
+  lapply(readxl::read_excel, path = data_file) %>% 
+  lapply(function(x) dplyr::mutate_if(x, function(y) "POSIXct" %in% class(y), as.Date)) %>% 
+  setNames(sheets)
+```
+
+
+```{r}
+data$FINISH %<>% 
+  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>% 
+  mutate(IsAgree = IsAgree == "Yes")
+```
+
+`IsComplete == 1`: completed until discharge or death
+
+`IsAgree == "Yes"`: agree to use data for those who didn't complete.
+
+`HosDate`: date of discharge
+
+`ICUDate`: date of this study ward discharge
+
+`OutCome`: death or not
+
+Admission information:
+
+```{r}
+data$ADM %<>% 
+  select(PatientNo, HospitalDate, NKQ, Tetanus, Pneumonia, Sepsis, Septic, CNS,
+         COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
+         Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
+         Emergency, Source, Mild, Seve) %>% 
+  mutate_at(c("Myo", "DiaCo", "DiaDa", "Mode", "CongI_III", "Peri", "Cere",
+              "Deme", "Chro", "Conn", "Peptic", "Hemi", "ModeSeve", "Meta",
+              "AIDS", "AnyMa", "CongIV", "Elective", "Emergency", "Mild", "Seve"),
+            function(x) dplyr::na_if(x, "NA") == "Yes")
+```
+
+Blood microbiology:
+
+```{r}
+data$MICBLD %<>% 
+  select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2)
+```
+
+`HAIDate`: date of sampling
+
+Daily monitoring:
+
+```{r}
+data$DAILY1n2 %<>% 
+  select(PatientNo, CVCCount, VSDate, Arterial, TempMax, TempMin) %>% 
+  mutate(Arterial = Arterial == "Yes")
+```
+
+`CVCCount`: number of central venous catheters.
+
+Patient information:
+
+```{r}
+data$ENR %<>% select(PatientNo, Sex, Age, YOB, RandDate)
+```
+
+Ventilation:
+
+```{r}
+data$AIR %<>% 
+  select(PatientNo, IsTrach, TrachDate) %>% 
+  mutate(IsTrach = IsTrach == "Yes")
+```
+
+Apache code variables:
+
+```{r}
+data$APAC %<>% 
+  select(PatientNo, HbA1c, Sodium, Potassium, Creatinine, Haematocrit, BloodCell,
+         Systolic, Diastolic, PuHightest, PuLowest, ResHightest, ResLowest, FiO2,
+         PaO2, PaCO2, HCO3, ArterialpH, GlasgowScore, Motor, Verbal, Eyes, Total)
+```
+
+Follow-ups:
+
+```{r}
+data$FU %<>% select(PatientNo, DeathDate28, Status28)
+```
+
+and:
+
+```{r}
+data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90)
+```
+
+## Microbiology variables (MICBLD)
+
+Patients with BSI, showing the date of the first BSI episode:
+
+```{r}
+first_bsi <- data$MICBLD %>% 
+  filter(OrganismsNo > 0) %>% 
+  arrange(HAIDate) %>% 
+  group_by(PatientNo) %>% 
+  summarise(first_BSI = first(HAIDate))
+```
+
+## Daily monitoring variables (DAILY1n2)
+
+Patients at risk of CLBSI (i.e. with central line placement for at least 2
+consecutive days):
+
+```{r}
+clbsi_risk <- data$DAILY1n2 %>% 
+  filter(CVCCount > 0) %>% 
+  group_by(PatientNo) %>% 
+  summarise(CLBSI_risk = ifelse(length(VSDate) > 1, any(diff(VSDate) < 2), FALSE))
+```
+
+Patients with CLBSI
+
+```{r}
+clbsi <- left_join(first_bsi, data$DAILY1n2, "PatientNo") %>% 
+  filter(first_BSI - VSDate < 6, CVCCount > 0) %>% 
+  group_by(PatientNo) %>% 
+  summarise(CLBSI = ifelse(length(VSDate) > 1, any(diff(VSDate) < 2), FALSE))
+```
+
+Patients at risk of ALBSI:
+
+```{r}
+albsi_risk <- data$DAILY1n2 %>% 
+  filter(Arterial) %>% 
+  group_by(PatientNo) %>% 
+  summarise(ALBSI_risk = ifelse(length(VSDate) > 1, any(diff(VSDate) < 2), FALSE))
+```
+
+Patients with ALBSI:
+
+```{r}
+albsi <- left_join(first_bsi, data$DAILY1n2, "PatientNo") %>% 
+  filter(first_BSI - VSDate < 6, Arterial) %>% 
+  group_by(PatientNo) %>% 
+  summarise(ALBSI = ifelse(length(VSDate) > 1, any(diff(VSDate) < 2), FALSE))
+```
+
+Total number of Central line days:
+
+```{r}
+nb_cl_days <- left_join(data$DAILY1n2, first_bsi, "PatientNo") %>% 
+  filter(is.na(first_BSI) | VSDate < first_BSI, CVCCount > 0) %>% 
+  group_by(PatientNo) %>% 
+  tally() %>%
+  rename(nb_cl_days = n)
+```
+
+Total number of arterial line days:
+
+```{r}
+nb_al_days <- left_join(data$DAILY1n2, first_bsi, "PatientNo") %>% 
+  filter(is.na(first_BSI) | VSDate < first_BSI, Arterial) %>% 
+  group_by(PatientNo) %>% 
+  tally() %>% 
+  rename(nb_al_days = n)
+```
+
+## Other variables
+
+Need to be calculated now because the calculation of APACHE-II need the age
+variable that is calculated here.
+
+```{r}
+data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
+           list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days)) %>% 
+  reduce(left_join, by = "PatientNo") %>% 
+  mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI"), replace_na, FALSE) %>% 
+  mutate_at(c("nb_cl_days", "nb_al_days"), replace_na, 0) %>% 
+  mutate(habsi_risk   = HosDate - HospitalDate > 1,
+         hospital     = dplyr::recode(sub("-.*$", "", PatientNo),
+                                        `003` = "HTD",
+                                        `020` = "NHTD",
+                                        `103` = "BVTV"),
+         age          = ifelse(is.na(Age),
+                               round(as.numeric(RandDate - ymd(paste(YOB, "0101"))) / 365),
+                               Age),
+         tracheostomy = NKQ == 1 | IsTrach,
+         dia_co       = DiaCo | DiaDa | HbA1c >= 6.5,
+         rand2icu     = ICUDate - RandDate,
+         rand2hos     = HosDate - RandDate,
+         adm2icu      = ICUDate - HospitalDate,
+         adm2hos      = HosDate - HospitalDate,
+         deathHOSdis  = OutCome < 3,
+         deathICUdis  = deathHOSdis & HosDate == ICUDate)
+```
+
+## Adding Charlson scores
+
+Computing and adding the Charlson scores to `data2`:
+
+```{r}
+data2 %<>% 
+  select(PatientNo, Myo, CongI_III, Peri, Cere, Deme, Chro, Conn, Peptic,
+         Mild, DiaCo, Hemi, ModeSeve, DiaDa, AnyMa, Mode, Meta, AIDS) %>% 
+  mutate_all(replace_na, FALSE) %>% 
+  mutate_if(is.logical, as.integer) %>% 
+  mutate_at(vars(Hemi, ModeSeve, DiaDa, AnyMa), function(x) 2 * x) %>% 
+  mutate_at(vars(Meta, AIDS), function(x) 6 * x) %>% 
+  mutate(Mode         = 3 * Mode,
+         charlson     = select_if(., is.numeric) %>% rowSums(),
+         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %>% as.character()) %>% 
+  select(PatientNo, charlson, charlson_cat) %>% 
+  left_join(data2, ., "PatientNo")
+```
+
+## Adding APACHE-II scores
+
+The Apache-II Score provides an estimate of ICU mortality based on a number of
+laboratory values and patient signs taking both acute and chronic disease into
+account.
+
+**Note:** The data used should relate to the 24 hours prior to randomisation and
+the worst (highest scoring) recorded values should be used.
+
+This function below computes score functions:
+
+```{r}
+make_score_functions <- function(scores, values) {
+  function(x) scores[cut(x, c(-Inf, values, +Inf), right = FALSE)]
+}
+```
+
+The parameters values for the score functions:
+
+```{r}
+apache_physio <- list(
+  temp = list(
+    scores = c(4:0, 1, 3, 4),
+    values = c(30, 32, 34, 36, 38.5, 39, 41)),
+  bp = list(
+    scores = c(4, 2, 0, 2:4),
+    values = c(50, 70, 110, 130, 160)),
+  hr = list(
+    scores = c(4, 3, 2, 0, 2, 3, 4),
+    values = c(40, 55, 70, 110, 140, 180)),
+  rr = list(
+    scores = c(4, 2, 1, 0, 1, 3, 4),
+    values = c(6, 10, 25, 35, 50)),
+  pao2 = list(
+    scores = 4:0,
+    values = c(55, 61, 70)),
+  aa_gradient = list(
+    scores = 0:4,
+    values = c(200, 350, 500)),
+  ph = list(
+    scores = c(4, 3, 2, 0, 1, 3, 4),
+    values = c(7.15, 7.25, 7.33, 7.5, 7.6, 7.7)),
+  hco3 = list(
+    scores = c(4, 3, 2, 0, 1, 3, 4),
+    values = c(15, 18, 23, 32, 41, 52)),
+  na = list(
+    scores = c(4:2, 0:4),
+    values = c(111, 120, 130, 150, 155, 160, 180)),
+  k = list(
+    scores = c(4, 2:0, 1, 3, 4),
+    values = c(2.5, 3, 3.5, 5.5, 6, 7)),
+  creatinine = list(
+    scores = c(2, 0, 2:4),
+    values = c(0.6, 1.5, 2, 3.5)),
+  hematocrit = list(
+    scores = c(4, 2, 0:2, 4),
+    values = c(20, 30, 46, 50, 60)),
+  wbc = list(
+    scores = c(4, 2, 0:2, 4),
+    values = c(1, 3, 15, 20, 40)),
+  age = list(
+    scores = c(0, 2, 3, 5, 6),
+    values = c(45, 55, 65, 75)))
+```
+
+Let's generate the score functions:
+
+```{r}
+score_fcts <- setNames(lapply(apache_physio,
+                              function(x) make_score_functions(x$scores, x$values)), 
+                       names(apache_physio))
+```
+
+Let's see an example:
+
+```{r}
+head(score_fcts$temp(data$DAILY1n2$TempMax), 100)
+```
+
+Computing and adding the apache scores to `data2`:
+
+```{r}
+data2 <- data$APAC %>% 
+  left_join(select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency), "PatientNo") %>% 
+  left_join(select(data$DAILY1n2, PatientNo, VSDate, TempMax, TempMin), c("PatientNo", "RandDate" = "VSDate")) %>% 
+  mutate(a = score_fcts$temp(TempMax),
+         b = score_fcts$temp(TempMin),
+         temp_score = ifelse(a < b, b, a),
+         map_score  = score_fcts$bp((2 * Diastolic + Systolic) / 3),
+         a = score_fcts$hr(PuHightest),
+         b = score_fcts$hr(PuLowest),
+         hr_score = ifelse(a < b, b, a),
+         a = score_fcts$rr(ResHightest),
+         b = score_fcts$rr(ResLowest),
+         rr_score = ifelse(a < b, b, a),
+         PaCO2 = ifelse(is.na(PaCO2), HCO3 / (0.03 * 10 ^ (ArterialpH - 6.1)), PaCO2),
+         aa_gradient = 713 * FiO2 - PaCO2 / .8 - PaO2,
+         a_score = ifelse(is.na(aa_gradient) | FiO2 < .5, score_fcts$pao2(PaO2), score_fcts$aa_gradient(aa_gradient)),
+         ph_score = ifelse(is.na(ArterialpH), score_fcts$hco3(HCO3), score_fcts$ph(ArterialpH)),
+         na_score = score_fcts$na(Sodium),
+         k_score = score_fcts$k(Potassium),
+         creatinine_score = score_fcts$creatinine(Creatinine),
+         hematocrit_score = score_fcts$hematocrit(Haematocrit),
+         wbc_score = score_fcts$wbc(BloodCell),
+         gcs_score = 15 - ifelse(GlasgowScore == "Preintubation",
+                                 ifelse(is.na(Motor) | is.na(Verbal) | is.na(Eyes) |
+                                          Motor == 0 | Verbal == 0   | Eyes == 0   |
+                                          Motor == 9 | Verbal == 9   | Eyes == 9,
+                                        Total,
+                                        Motor + Verbal + Eyes),
+                                 15),
+         age_score = score_fcts$age(age),
+         c_score = ifelse(Mode + CongIV + Seve + AIDS < 1,
+                          0,
+                          ifelse(Emergency,
+                                 5,
+                                 ifelse(Elective, 2, 5)))) %>% 
+  select(PatientNo, TempMin, TempMax, temp_score, map_score, hr_score, rr_score, a_score, ph_score, na_score, k_score,
+         creatinine_score, hematocrit_score, wbc_score, gcs_score, age_score, c_score) %>% 
+  mutate_all(replace_na, 0) %>% 
+  transmute(PatientNo = PatientNo,
+            apache = temp_score + map_score + hr_score + rr_score + a_score + ph_score + na_score + k_score +
+                     creatinine_score + hematocrit_score + wbc_score + gcs_score + age_score + c_score) %>% 
+  left_join(data2, ., "PatientNo")
+```
