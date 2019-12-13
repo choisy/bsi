@@ -192,6 +192,16 @@ first_bsi <- data$MICBLD %>%
   summarise(first_BSI = first(HAIDate))
 ```
 
+Numbers of BSI episodes:
+
+```{r}
+nb_bsi <- data$MICBLD %>% 
+  filter(OrganismsNo > 0) %>% 
+  arrange(HAIDate) %>% 
+  group_by(PatientNo) %>% 
+  summarise(nb_bsi = 1 + sum(diff(HAIDate) > 2))
+```
+
 ## Daily monitoring variables (DAILY1n2)
 
 Patients at risk of CLBSI (i.e. with central line placement for at least 2
@@ -258,10 +268,10 @@ variable that is calculated here.
 
 ```{r}
 data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
-           list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days)) %>% 
+           list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days, nb_bsi)) %>% 
   reduce(left_join, by = "PatientNo") %>% 
   mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI"), replace_na, FALSE) %>% 
-  mutate_at(c("nb_cl_days", "nb_al_days"), replace_na, 0) %>% 
+  mutate_at(c("nb_cl_days", "nb_al_days", "nb_bsi"), replace_na, 0) %>% 
   mutate(habsi_risk   = HosDate - HospitalDate > 1,
          hospital     = dplyr::recode(sub("-.*$", "", PatientNo),
                                         `003` = "HTD",
