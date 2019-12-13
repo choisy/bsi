@@ -306,6 +306,14 @@ nb_path_bsi1 <- data$MICBLD %>%
 
 ## Daily monitoring variables (DAILY1n2)
 
+Patients with catheter:
+
+```{r}
+had_catheter <- data$DAILY1n2 %>% 
+  transmute(PatientNo, had_catheter = CVCCount > 0) %>% 
+  unique()
+```
+
 Patients at risk of CLBSI (i.e. with central line placement for at least 2
 consecutive days):
 
@@ -371,9 +379,9 @@ variable that is calculated here.
 ```{r}
 data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
            list(first_bsi, clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days,
-                nb_al_days, nb_bsi, nb_path_bsi1)) %>% 
+                nb_al_days, nb_bsi, nb_path_bsi1, had_catheter)) %>% 
   reduce(left_join, by = "PatientNo") %>% 
-  mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI"), replace_na, FALSE) %>% 
+  mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI", "had_catheter"), replace_na, FALSE) %>% 
   mutate_at(c("nb_cl_days", "nb_al_days", "nb_bsi"), replace_na, 0) %>% 
   mutate(
 # at risk of hopital acquired blood stream infection:
