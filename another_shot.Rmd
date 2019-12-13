@@ -70,6 +70,7 @@ library(dplyr)
 library(purrr)
 library(tidyr)
 library(lubridate)
+library(tibble)
 ```
 
 ## Reading data
@@ -202,6 +203,81 @@ nb_bsi <- data$MICBLD %>%
   summarise(nb_bsi = 1 + sum(diff(HAIDate) > 2))
 ```
 
+Number of pathogens in the first episode of BSI:
+
+The following function selects the rows of a patient subset of a `MICBLD` data
+frame that correspond to the first episode:
+
+```{r}
+first_bsi <- function(x) {
+  sel <- which(diff(x$HAIDate) > 2)
+  if (length(sel) > 0) return(x[seq_len(sel[1]), ])
+  x
+}
+```
+
+Let's try it:
+
+```{r}
+data$MICBLD %>% 
+  filter(OrganismsNo > 0, PatientNo == "003-510") %>% 
+  print() %>% 
+  first_bsi()
+```
+
+or:
+
+```{r}
+data$MICBLD %>% 
+  filter(OrganismsNo > 0, PatientNo == "020-103") %>% 
+  print() %>% 
+  first_bsi()
+```
+
+or:
+
+```{r}
+data$MICBLD %>% 
+  filter(OrganismsNo > 0, PatientNo == "020-526") %>% 
+  print() %>% 
+  first_bsi()
+```
+
+or:
+
+```{r}
+data$MICBLD %>% 
+  filter(OrganismsNo > 0, PatientNo == "103-064") %>% 
+  print() %>% 
+  first_bsi()
+```
+
+or:
+
+```{r}
+data$MICBLD %>% 
+  filter(OrganismsNo > 0, PatientNo == "103-065") %>% 
+  print() %>% 
+  first_bsi()
+```
+
+The number of pathogen in the first BSI:
+
+```{r}
+nb_path_bsi1 <- data$MICBLD %>% 
+  mutate(Iden1 = ifelse(Iden1 > 5, OtherIden1, Iden1),
+         Iden2 = ifelse(Iden2 > 5, OtherIden2, Iden2)) %>% 
+  arrange(HAIDate) %>% 
+  filter(OrganismsNo > 0) %>%
+  group_by(PatientNo) %>% 
+  group_modify(~ first_bsi(.x) %>% 
+                   select(Iden1, Iden2) %>% 
+                   unlist() %>% 
+                   unique() %>% 
+                   length() %>% 
+                   enframe(name = NULL, value = "nb_path_bsi1"))
+```
+
 ## Daily monitoring variables (DAILY1n2)
 
 Patients at risk of CLBSI (i.e. with central line placement for at least 2
@@ -268,7 +344,7 @@ variable that is calculated here.
 
 ```{r}
 data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
-           list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days, nb_bsi)) %>% 
+           list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days, nb_bsi, nb_path_bsi1)) %>% 
   reduce(left_join, by = "PatientNo") %>% 
   mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI"), replace_na, FALSE) %>% 
   mutate_at(c("nb_cl_days", "nb_al_days", "nb_bsi"), replace_na, 0) %>% 
