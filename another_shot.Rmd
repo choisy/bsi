@@ -71,6 +71,7 @@ library(purrr)
 library(tidyr)
 library(lubridate)
 library(tibble)
+library(stringr)
 ```
 
 ## Reading data
@@ -127,11 +128,37 @@ data$ADM %<>%
             function(x) dplyr::na_if(x, "NA") == "Yes")
 ```
 
+```{r}
+
+```
+
+The following functions corrects the names of the bacteria:
+
+```{r}
+correct_names <- function(x) {
+  x %>% 
+    str_to_sentence() %>% 
+    str_replace("Staph epidermidis"                 , "Staphylococcus epidermidis") %>%
+    str_replace("Staph haemolyticus"                , "Staphylococcus haemolyticus") %>%
+    str_replace("S.marcescens"                      , "Serratia marcescens") %>% 
+    str_replace("Elizabethkingie"                   , "Elizabethkingia") %>% 
+    str_replace("Enterobacter aerogenes"            , "Klebsiella aerogenes") %>% 
+    str_replace("Proteus mirasilis"                 , "Proteus mirabilis") %>% 
+    str_replace("Staphylococcin epidermidis"        , "Staphylococcus epidermidis") %>% 
+    str_replace("Staphylococcs xylosus"             , "Staphylococcus xylosus") %>% 
+    str_replace("Stenotrophomonas malto"            , "Stenotrophomonas maltophilia") %>% 
+    str_replace("Enterococcus fecalis"              , "Enterococcus faecalis") %>% 
+    str_replace("Stenotrophomonas maltophiliaphilia", "Stenotrophomonas maltophilia") %>% 
+    str_replace(" \\(-\\)", "")
+}
+```
+
 Blood microbiology:
 
 ```{r}
 data$MICBLD %<>% 
-  select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2)
+  select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2) %>% 
+  mutate_at(c("OtherIden1", "OtherIden2"), correct_names)
 ```
 
 `HAIDate`: date of sampling
