@@ -409,7 +409,9 @@ title wherever you want to display the reference list.
 &gt; library(dplyr)
 &gt; library(purrr)
 &gt; library(tidyr)
-&gt; library(lubridate)</code></pre>
+&gt; library(lubridate)
+&gt; library(tibble)
+&gt; library(stringr)</code></pre>
 </div>
 <div id="reading-data" class="section level2">
 <h2>Reading data</h2>
@@ -424,7 +426,8 @@ title wherever you want to display the reference list.
 +   setNames(sheets)</code></pre>
 <pre class="r"><code>&gt; data$FINISH %&lt;&gt;% 
 +   select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %&gt;% 
-+   mutate(IsAgree = IsAgree == &quot;Yes&quot;)</code></pre>
++   mutate(IsAgree = IsAgree == &quot;Yes&quot;) %&gt;% 
++   rename(ICUDateFINISH = ICUDate)</code></pre>
 <p><code>IsComplete == 1</code>: completed until discharge or death</p>
 <p><code>IsAgree == &quot;Yes&quot;</code>: agree to use data for those who didn’t complete.</p>
 <p><code>HosDate</code>: date of discharge</p>
@@ -435,14 +438,33 @@ title wherever you want to display the reference list.
 +   select(PatientNo, HospitalDate, NKQ, Tetanus, Pneumonia, Sepsis, Septic, CNS,
 +          COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
 +          Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
-+          Emergency, Source, Mild, Seve) %&gt;% 
++          Emergency, Source, Mild, Seve, ICUDate) %&gt;% 
 +   mutate_at(c(&quot;Myo&quot;, &quot;DiaCo&quot;, &quot;DiaDa&quot;, &quot;Mode&quot;, &quot;CongI_III&quot;, &quot;Peri&quot;, &quot;Cere&quot;,
 +               &quot;Deme&quot;, &quot;Chro&quot;, &quot;Conn&quot;, &quot;Peptic&quot;, &quot;Hemi&quot;, &quot;ModeSeve&quot;, &quot;Meta&quot;,
 +               &quot;AIDS&quot;, &quot;AnyMa&quot;, &quot;CongIV&quot;, &quot;Elective&quot;, &quot;Emergency&quot;, &quot;Mild&quot;, &quot;Seve&quot;),
-+             function(x) dplyr::na_if(x, &quot;NA&quot;) == &quot;Yes&quot;)</code></pre>
++             function(x) dplyr::na_if(x, &quot;NA&quot;) == &quot;Yes&quot;) %&gt;% 
++   rename(ICUDateADM = ICUDate)</code></pre>
+<p>The following function corrects the names of the bacteria:</p>
+<pre class="r"><code>&gt; correct_names &lt;- function(x) {
++   x %&gt;% 
++     str_to_sentence() %&gt;% 
++     str_replace(&quot;Staph epidermidis&quot;                 , &quot;Staphylococcus epidermidis&quot;) %&gt;%
++     str_replace(&quot;Staph haemolyticus&quot;                , &quot;Staphylococcus haemolyticus&quot;) %&gt;%
++     str_replace(&quot;S.marcescens&quot;                      , &quot;Serratia marcescens&quot;) %&gt;% 
++     str_replace(&quot;Elizabethkingie&quot;                   , &quot;Elizabethkingia&quot;) %&gt;% 
++     str_replace(&quot;Enterobacter aerogenes&quot;            , &quot;Klebsiella aerogenes&quot;) %&gt;% 
++     str_replace(&quot;Proteus mirasilis&quot;                 , &quot;Proteus mirabilis&quot;) %&gt;% 
++     str_replace(&quot;Staphylococcin epidermidis&quot;        , &quot;Staphylococcus epidermidis&quot;) %&gt;% 
++     str_replace(&quot;Staphylococcs xylosus&quot;             , &quot;Staphylococcus xylosus&quot;) %&gt;% 
++     str_replace(&quot;Stenotrophomonas malto&quot;            , &quot;Stenotrophomonas maltophilia&quot;) %&gt;% 
++     str_replace(&quot;Enterococcus fecalis&quot;              , &quot;Enterococcus faecalis&quot;) %&gt;% 
++     str_replace(&quot;Stenotrophomonas maltophiliaphilia&quot;, &quot;Stenotrophomonas maltophilia&quot;) %&gt;% 
++     str_replace(&quot; \\(-\\)&quot;, &quot;&quot;)
++ }</code></pre>
 <p>Blood microbiology:</p>
 <pre class="r"><code>&gt; data$MICBLD %&lt;&gt;% 
-+   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2)</code></pre>
++   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2) %&gt;% 
++   mutate_at(c(&quot;OtherIden1&quot;, &quot;OtherIden2&quot;), correct_names)</code></pre>
 <p><code>HAIDate</code>: date of sampling</p>
 <p>Daily monitoring:</p>
 <pre class="r"><code>&gt; data$DAILY1n2 %&lt;&gt;% 
@@ -473,6 +495,104 @@ title wherever you want to display the reference list.
 +   arrange(HAIDate) %&gt;% 
 +   group_by(PatientNo) %&gt;% 
 +   summarise(first_BSI = first(HAIDate))</code></pre>
+<p>Numbers of BSI episodes:</p>
+<pre class="r"><code>&gt; nb_bsi &lt;- data$MICBLD %&gt;% 
++   filter(OrganismsNo &gt; 0) %&gt;% 
++   arrange(HAIDate) %&gt;% 
++   group_by(PatientNo) %&gt;% 
++   summarise(nb_bsi = 1 + sum(diff(HAIDate) &gt; 2))</code></pre>
+<p>Number of pathogens in the first episode of BSI:</p>
+<p>The following function selects the rows of a patient subset of a <code>MICBLD</code> data frame that correspond to the first episode:</p>
+<pre class="r"><code>&gt; sel_first_bsi &lt;- function(x) {
++   sel &lt;- which(diff(x$HAIDate) &gt; 2)
++   if (length(sel) &gt; 0) return(x[seq_len(sel[1]), ])
++   x
++ }</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>&gt; data$MICBLD %&gt;% 
++   filter(OrganismsNo &gt; 0, PatientNo == &quot;003-510&quot;) %&gt;% 
++   print() %&gt;% 
++   sel_first_bsi()
+# A tibble: 2 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1        OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;             &lt;chr&gt;     
+1 003-510   2016-12-15           1     6    NA Proteus mirabilis &lt;NA&gt;      
+2 003-510   2016-12-29           1     6    NA Proteus mirabilis &lt;NA&gt;      
+# A tibble: 1 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1        OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;             &lt;chr&gt;     
+1 003-510   2016-12-15           1     6    NA Proteus mirabilis &lt;NA&gt;      </code></pre>
+<p>or:</p>
+<pre class="r"><code>&gt; data$MICBLD %&gt;% 
++   filter(OrganismsNo &gt; 0, PatientNo == &quot;020-103&quot;) %&gt;% 
++   print() %&gt;% 
++   sel_first_bsi()
+# A tibble: 2 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1          OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;               &lt;chr&gt;     
+1 020-103   2018-10-22           1     6    NA Serratia marcescens &lt;NA&gt;      
+2 020-103   2018-10-31           1     2    NA &lt;NA&gt;                &lt;NA&gt;      
+# A tibble: 1 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1          OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;               &lt;chr&gt;     
+1 020-103   2018-10-22           1     6    NA Serratia marcescens &lt;NA&gt;      </code></pre>
+<p>or:</p>
+<pre class="r"><code>&gt; data$MICBLD %&gt;% 
++   filter(OrganismsNo &gt; 0, PatientNo == &quot;020-526&quot;) %&gt;% 
++   print() %&gt;% 
++   sel_first_bsi()
+# A tibble: 4 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1             OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;                  &lt;chr&gt;     
+1 020-526   2018-06-25           1     6    NA Burkholderia seminalis &lt;NA&gt;      
+2 020-526   2018-07-02           1     4    NA &lt;NA&gt;                   &lt;NA&gt;      
+3 020-526   2018-07-04           1     4    NA &lt;NA&gt;                   &lt;NA&gt;      
+4 020-526   2018-07-05           2     4     2 &lt;NA&gt;                   &lt;NA&gt;      
+# A tibble: 1 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1             OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;                  &lt;chr&gt;     
+1 020-526   2018-06-25           1     6    NA Burkholderia seminalis &lt;NA&gt;      </code></pre>
+<p>or:</p>
+<pre class="r"><code>&gt; data$MICBLD %&gt;% 
++   filter(OrganismsNo &gt; 0, PatientNo == &quot;103-064&quot;) %&gt;% 
++   print() %&gt;% 
++   sel_first_bsi()
+# A tibble: 2 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;     
+1 103-064   2017-08-04           1     3    NA &lt;NA&gt;       &lt;NA&gt;      
+2 103-064   2017-08-29           1     5    NA &lt;NA&gt;       &lt;NA&gt;      
+# A tibble: 1 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;     
+1 103-064   2017-08-04           1     3    NA &lt;NA&gt;       &lt;NA&gt;      </code></pre>
+<p>or:</p>
+<pre class="r"><code>&gt; data$MICBLD %&gt;% 
++   filter(OrganismsNo &gt; 0, PatientNo == &quot;103-065&quot;) %&gt;% 
++   print() %&gt;% 
++   sel_first_bsi()
+# A tibble: 2 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;     
+1 103-065   2017-09-21           1     3    NA &lt;NA&gt;       &lt;NA&gt;      
+2 103-065   2017-10-16           1     3    NA &lt;NA&gt;       &lt;NA&gt;      
+# A tibble: 1 x 7
+  PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2
+  &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;     
+1 103-065   2017-09-21           1     3    NA &lt;NA&gt;       &lt;NA&gt;      </code></pre>
+<p>The number of pathogen in the first BSI:</p>
+<pre class="r"><code>&gt; nb_path_bsi1 &lt;- data$MICBLD %&gt;% 
++   mutate(Iden1 = ifelse(Iden1 &gt; 5, OtherIden1, Iden1),
++          Iden2 = ifelse(Iden2 &gt; 5, OtherIden2, Iden2)) %&gt;% 
++   arrange(HAIDate) %&gt;% 
++   filter(OrganismsNo &gt; 0) %&gt;%
++   group_by(PatientNo) %&gt;% 
++   group_modify(~ sel_first_bsi(.x) %&gt;% 
++                    select(Iden1, Iden2) %&gt;% 
++                    unlist() %&gt;% 
++                    unique() %&gt;% 
++                    length() %&gt;% 
++                    enframe(name = NULL, value = &quot;nb_path_bsi1&quot;))</code></pre>
 </div>
 <div id="daily-monitoring-variables-daily1n2" class="section level2">
 <h2>Daily monitoring variables (DAILY1n2)</h2>
@@ -513,26 +633,40 @@ title wherever you want to display the reference list.
 <h2>Other variables</h2>
 <p>Need to be calculated now because the calculation of APACHE-II need the age variable that is calculated here.</p>
 <pre class="r"><code>&gt; data2 &lt;- c(data[setdiff(names(data), c(&quot;DAILY1n2&quot;, &quot;MICBLD&quot;))],
-+            list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days)) %&gt;% 
++            list(first_bsi, clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days,
++                 nb_al_days, nb_bsi, nb_path_bsi1)) %&gt;% 
 +   reduce(left_join, by = &quot;PatientNo&quot;) %&gt;% 
 +   mutate_at(c(&quot;CLBSI_risk&quot;, &quot;CLBSI&quot;, &quot;ALBSI_risk&quot;, &quot;ALBSI&quot;), replace_na, FALSE) %&gt;% 
-+   mutate_at(c(&quot;nb_cl_days&quot;, &quot;nb_al_days&quot;), replace_na, 0) %&gt;% 
-+   mutate(habsi_risk   = HosDate - HospitalDate &gt; 1,
++   mutate_at(c(&quot;nb_cl_days&quot;, &quot;nb_al_days&quot;, &quot;nb_bsi&quot;), replace_na, 0) %&gt;% 
++   mutate(
++ # at risk of hopital acquired blood stream infection:
++          habsi_risk   = replace_na(HosDate - HospitalDate &gt; 1, FALSE),
++ # hospitals:
 +          hospital     = dplyr::recode(sub(&quot;-.*$&quot;, &quot;&quot;, PatientNo),
 +                                         `003` = &quot;HTD&quot;,
 +                                         `020` = &quot;NHTD&quot;,
 +                                         `103` = &quot;BVTV&quot;),
++ # ages:
 +          age          = ifelse(is.na(Age),
 +                                round(as.numeric(RandDate - ymd(paste(YOB, &quot;0101&quot;))) / 365),
 +                                Age),
++ # tracheostomy:
 +          tracheostomy = NKQ == 1 | IsTrach,
++          tracheostomy = ifelse(nb_bsi &gt; 0, tracheostomy &amp; TrachDate &lt; first_BSI, tracheostomy),
++ # sepsis:
++          sepsis = Sepsis | Septic,
++ # comorbidity of diabetes:
 +          dia_co       = DiaCo | DiaDa | HbA1c &gt;= 6.5,
-+          rand2icu     = ICUDate - RandDate,
++ # durations:
++          rand2icu     = ICUDateFINISH - RandDate,
 +          rand2hos     = HosDate - RandDate,
-+          adm2icu      = ICUDate - HospitalDate,
++          adm2icu      = ICUDateFINISH - HospitalDate,
 +          adm2hos      = HosDate - HospitalDate,
++          ICUstay      = ICUDateFINISH - ICUDateADM,
++ # death at hospital discharge:
 +          deathHOSdis  = OutCome &lt; 3,
-+          deathICUdis  = deathHOSdis &amp; HosDate == ICUDate)
++ # death at ICU discharge:
++          deathICUdis  = deathHOSdis &amp; HosDate == ICUDateFINISH)
 Warning: 8 failed to parse.</code></pre>
 </div>
 <div id="adding-charlson-scores" class="section level2">
@@ -609,9 +743,8 @@ Warning: 8 failed to parse.</code></pre>
 +                        names(apache_physio))</code></pre>
 <p>Let’s see an example:</p>
 <pre class="r"><code>&gt; head(score_fcts$temp(data$DAILY1n2$TempMax), 100)
-  [1]  3  1  0  0  0  0  0  0  0  3  1  3  1  0  0  1  3  3  3  3  4  0  0  0  0  0  0  0  3  3  1  3  0  0  0  0  0  0  1  0  0  0  0  1
- [45]  0  0  1  4  1  3  3  0  0  0  3  0  0  0  0  0  3  0  0  3  3  1  1  1  3  1  1  3  3  3  0  0  3  3  3  3  0  0  1  1  1  0 NA  3
- [89]  3  1  1  1  0  0  0  0  0  0  0  0</code></pre>
+  [1]  3  1  0  0  0  0  0  0  0  3  1  3  1  0  0  1  3  3  3  3  4  0  0  0  0  0  0  0  3  3  1  3  0  0  0  0  0  0  1  0  0  0  0  1  0  0  1  4  1  3  3  0  0  0  3  0  0  0  0  0  3  0  0  3  3  1  1  1  3  1  1  3  3  3  0  0  3  3  3  3  0  0
+ [83]  1  1  1  0 NA  3  3  1  1  1  0  0  0  0  0  0  0  0</code></pre>
 <p>Computing and adding the apache scores to <code>data2</code>:</p>
 <pre class="r"><code>&gt; data2 &lt;- data$APAC %&gt;% 
 +   left_join(select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency), &quot;PatientNo&quot;) %&gt;% 

@@ -49,7 +49,8 @@ knitr::opts_chunk$set(margin = TRUE, prompt = TRUE, comment = "",
                       dev.args = list(pointsize = 11), fig.height = 3.5,
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
-options(width = 137)
+#options(width = 137)
+options(width = 253)
 ```
 
 ## Packages
@@ -101,7 +102,8 @@ data <- sheets %>%
 ```{r}
 data$FINISH %<>% 
   select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>% 
-  mutate(IsAgree = IsAgree == "Yes")
+  mutate(IsAgree = IsAgree == "Yes") %>% 
+  rename(ICUDateFINISH = ICUDate)
 ```
 
 `IsComplete == 1`: completed until discharge or death
@@ -121,18 +123,15 @@ data$ADM %<>%
   select(PatientNo, HospitalDate, NKQ, Tetanus, Pneumonia, Sepsis, Septic, CNS,
          COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
          Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
-         Emergency, Source, Mild, Seve) %>% 
+         Emergency, Source, Mild, Seve, ICUDate) %>% 
   mutate_at(c("Myo", "DiaCo", "DiaDa", "Mode", "CongI_III", "Peri", "Cere",
               "Deme", "Chro", "Conn", "Peptic", "Hemi", "ModeSeve", "Meta",
               "AIDS", "AnyMa", "CongIV", "Elective", "Emergency", "Mild", "Seve"),
-            function(x) dplyr::na_if(x, "NA") == "Yes")
+            function(x) dplyr::na_if(x, "NA") == "Yes") %>% 
+  rename(ICUDateADM = ICUDate)
 ```
 
-```{r}
-
-```
-
-The following functions corrects the names of the bacteria:
+The following function corrects the names of the bacteria:
 
 ```{r}
 correct_names <- function(x) {
@@ -236,7 +235,7 @@ The following function selects the rows of a patient subset of a `MICBLD` data
 frame that correspond to the first episode:
 
 ```{r}
-first_bsi <- function(x) {
+sel_first_bsi <- function(x) {
   sel <- which(diff(x$HAIDate) > 2)
   if (length(sel) > 0) return(x[seq_len(sel[1]), ])
   x
@@ -249,7 +248,7 @@ Let's try it:
 data$MICBLD %>% 
   filter(OrganismsNo > 0, PatientNo == "003-510") %>% 
   print() %>% 
-  first_bsi()
+  sel_first_bsi()
 ```
 
 or:
@@ -258,7 +257,7 @@ or:
 data$MICBLD %>% 
   filter(OrganismsNo > 0, PatientNo == "020-103") %>% 
   print() %>% 
-  first_bsi()
+  sel_first_bsi()
 ```
 
 or:
@@ -267,7 +266,7 @@ or:
 data$MICBLD %>% 
   filter(OrganismsNo > 0, PatientNo == "020-526") %>% 
   print() %>% 
-  first_bsi()
+  sel_first_bsi()
 ```
 
 or:
@@ -276,7 +275,7 @@ or:
 data$MICBLD %>% 
   filter(OrganismsNo > 0, PatientNo == "103-064") %>% 
   print() %>% 
-  first_bsi()
+  sel_first_bsi()
 ```
 
 or:
@@ -285,7 +284,7 @@ or:
 data$MICBLD %>% 
   filter(OrganismsNo > 0, PatientNo == "103-065") %>% 
   print() %>% 
-  first_bsi()
+  sel_first_bsi()
 ```
 
 The number of pathogen in the first BSI:
@@ -297,7 +296,7 @@ nb_path_bsi1 <- data$MICBLD %>%
   arrange(HAIDate) %>% 
   filter(OrganismsNo > 0) %>%
   group_by(PatientNo) %>% 
-  group_modify(~ first_bsi(.x) %>% 
+  group_modify(~ sel_first_bsi(.x) %>% 
                    select(Iden1, Iden2) %>% 
                    unlist() %>% 
                    unique() %>% 
@@ -371,26 +370,46 @@ variable that is calculated here.
 
 ```{r}
 data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
-           list(clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days, nb_al_days, nb_bsi, nb_path_bsi1)) %>% 
+           list(first_bsi, clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days,
+                nb_al_days, nb_bsi, nb_path_bsi1)) %>% 
   reduce(left_join, by = "PatientNo") %>% 
   mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI"), replace_na, FALSE) %>% 
   mutate_at(c("nb_cl_days", "nb_al_days", "nb_bsi"), replace_na, 0) %>% 
-  mutate(habsi_risk   = HosDate - HospitalDate > 1,
-         hospital     = dplyr::recode(sub("-.*$", "", PatientNo),
-                                        `003` = "HTD",
-                                        `020` = "NHTD",
-                                        `103` = "BVTV"),
+  mutate(
+# at risk of hopital acquired blood stream infection:
+         habsi_risk   = replace_na(HosDate - HospitalDate > 1, FALSE),
+# hospitals:
+         hospital     = recode(sub("-.*$", "", PatientNo),
+                                 `003` = "HTD",
+                                 `020` = "NHTD",
+                                 `103` = "BVTV"),
+# ages:
          age          = ifelse(is.na(Age),
                                round(as.numeric(RandDate - ymd(paste(YOB, "0101"))) / 365),
                                Age),
-         tracheostomy = NKQ == 1 | IsTrach,
+# HABSI:
+         habsi        = nb_bsi > 0,
+# recode NKQ:
+         NKQ          = recode(NKQ, `1` = "tracheostomy", `2` = "mouth"),
+# tracheostomy:
+         tracheostomy = NKQ == "mouth" | IsTrach,
+         tracheostomy = ifelse(habsi, tracheostomy & TrachDate < first_BSI, tracheostomy),
+# sepsis:
+         sepsis = Sepsis | Septic,
+# comorbidity of diabetes:
          dia_co       = DiaCo | DiaDa | HbA1c >= 6.5,
-         rand2icu     = ICUDate - RandDate,
+# durations:
+         rand2icu     = ICUDateFINISH - RandDate,
          rand2hos     = HosDate - RandDate,
-         adm2icu      = ICUDate - HospitalDate,
+         adm2icu      = ICUDateFINISH - HospitalDate,
          adm2hos      = HosDate - HospitalDate,
+         ICUstay      = ICUDateFINISH - ICUDateADM,
+# death at hospital discharge:
          deathHOSdis  = OutCome < 3,
-         deathICUdis  = deathHOSdis & HosDate == ICUDate)
+# death at ICU discharge:
+         deathICUdis  = deathHOSdis & HosDate == ICUDateFINISH,
+# other pathogen:
+         otherpath    = ! is.na(SpOther))
 ```
 
 ## Adding Charlson scores
@@ -537,3 +556,154 @@ data2 <- data$APAC %>%
                      creatinine_score + hematocrit_score + wbc_score + gcs_score + age_score + c_score) %>% 
   left_join(data2, ., "PatientNo")
 ```
+
+## Cleaning the data set
+
+## Filtering the data set
+
+```{r}
+data2 %<>% filter(!(IsCompleted > 1 & ! IsAgree))
+```
+
+## 2 Derivation of Table 1 on demographics
+
+```{r}
+groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI")
+```
+
+```{r}
+lapply2 <- function(X, FUN, ...) setNames(lapply(X, FUN, ...), X)
+```
+
+```{r}
+table2 <- function(group, var) {
+  table(data2[[var]], data2[[group]])
+}
+```
+
+Hospital types:
+
+```{r}
+lapply2(groups, table2, "hospital")
+```
+
+Sex:
+
+```{r}
+lapply2(groups, table2, "Sex")
+```
+
+Age:
+
+```{r}
+split2 <- function(x, var) {
+  map(c(list, function(y) split(y, y[[var]])), function(f) f(x))
+}
+```
+
+```{r}
+quantile2 <- function(group, var, ...) {
+  data2 %>%
+    split2(group) %>% 
+    reduce(c) %>% 
+    lapply(function(x) quantile(x[[var]], c(.25, .5, .75), ...)) %>% 
+    setNames(c("all", "without", "with"))
+}
+```
+
+```{r}
+lapply2(groups, quantile2, "age")
+```
+
+Transfer from other hospital:
+
+```{r}
+lapply2(groups, table2, "Source")
+```
+
+Tracheostomy:
+
+```{r}
+lapply2(groups, table2, "NKQ")
+```
+
+Any tracheostomy:
+
+```{r}
+# check the definitions on pages 3, 21 and 24
+```
+
+APACHE II:
+
+```{r}
+lapply2(groups, quantile2, "apache")
+```
+
+Charlson index:
+
+```{r}
+lapply2(groups, table2, "charlson_cat")
+```
+
+Causes of admission:
+
+```{r}
+lapply2(groups, table2, "Tetanus")
+```
+
+```{r}
+#lapply2(c("Tetanus", "Pneumonia"), lapply2, X = groups, FUN = table2)
+```
+
+```{r}
+lapply2(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath"),
+        function(x) lapply2(groups, table2, x))
+```
+
+Comorbidity of diabetes:
+
+```{r}
+lapply2(groups, table2, "dia_co")
+```
+
+Comorbidity of Moderate or severe liver disease:
+
+```{r}
+lapply2(groups, table2, "Mode")
+```
+
+Times:
+
+There are missing values here:
+
+```{r}
+data2 %>% 
+  select(ICUDateFINISH, RandDate, HosDate, HospitalDate) %>% 
+  lapply(function(x) any(is.na(x)))
+```
+
+So we need to deal with these missing values:
+
+```{r}
+lapply2(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"),
+        function(x) lapply2(groups, quantile2, x, na.rm = TRUE))
+```
+
+Patient-days:
+
+```{r}
+lapply(groups, function(x) {
+  data2 %>% 
+    group_by(.[[x]]) %>% 
+    summarise(patientday = sum(rand2icu, na.rm = TRUE))
+})
+```
+
+```{r}
+lapply(groups, function(x) {
+  data2 %>% 
+    group_by(.[[x]]) %>% 
+    summarise(patientday = sum(rand2hos, na.rm = TRUE))
+})
+```
+
