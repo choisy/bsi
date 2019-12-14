@@ -660,6 +660,7 @@ lapply2(groups, table2, "Tetanus")
 ```
 
 ```{r}
+# Strange that this doesn't work and we have to use the code in the following chunk...
 #lapply2(c("Tetanus", "Pneumonia"), lapply2, X = groups, FUN = table2)
 ```
 
@@ -720,4 +721,63 @@ Number of patients with central line catheter during ICU:
 ```{r}
 lapply2(groups, table2, "had_catheter")
 ```
+
+Total number of central line days:
+
+```{r}
+lapply2(groups, quantile2, "nb_cl_days")
+```
+
+Total number of central line patient-day:
+
+```{r}
+lapply(groups, function(x) {
+  data2 %>% 
+    group_by(.[[x]]) %>% 
+    summarise(patientday = sum(nb_cl_days, na.rm = TRUE))
+})
+```
+
+The following function calculates the mean with confidence interval:
+
+```{r}
+mean_ci <- function(x) {
+  m <- lm(x ~ 1)
+  setNames(c(coef(m), confint(m)), c("estimate", "lower", "upper"))
+}
+```
+
+Let's try it:
+
+```{r}
+mean_ci(data2$nb_cl_days) %>% 
+  t() %>% 
+  as.data.frame()
+```
+
+A version of this function that takes a data frame as an input:
+
+```{r}
+mean_ci_df <- function(x) {
+  as.data.frame(t(mean_ci(x$nb_cl_days)))
+}
+```
+
+Let's try it:
+
+```{r}
+mean_ci_df(data2)
+```
+
+Number of Central line day per patient (mean, CI95%):
+
+```{r}
+lapply(groups, function(x) {
+  data2 %>% 
+    group_by(.[[x]]) %>% 
+    group_modify(~ mean_ci_df(.x))
+})
+```
+
+
 
