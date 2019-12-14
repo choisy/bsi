@@ -819,3 +819,10 @@ lapply(groups, function(x) {
     group_modify(~ mean_ci_df(.x, "nb_al_days"))
 })
 ```
+
+Mortality at ICU discharge:
+
+```{r}
+lapply2(groups, table2, "deathICUdis")
+```
+
