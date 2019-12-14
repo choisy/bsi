@@ -835,4 +835,12 @@ data2 %>%
   setNames(c("without", "with"))
 ```
 
+Mortality at ICU discharge by site:
+
+```{r}
+data2 %>% 
+  split(.$hospital) %>%
+  lapply2(function(x) lapply2(groups, function(group) table(x[["deathICUdis"]], x[[group]]))) %>% 
+  setNames(sort(unique(data2$hospital)))
+```
 
