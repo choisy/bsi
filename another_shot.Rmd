@@ -767,15 +767,15 @@ mean_ci(data2$nb_cl_days) %>%
 A version of this function that takes a data frame as an input:
 
 ```{r}
-mean_ci_df <- function(x) {
-  as.data.frame(t(mean_ci(x$nb_cl_days)))
+mean_ci_df <- function(x, var) {
+  as.data.frame(t(mean_ci(x[[var]])))
 }
 ```
 
 Let's try it:
 
 ```{r}
-mean_ci_df(data2)
+mean_ci_df(data2, "nb_cl_days")
 ```
 
 Number of Central line day per patient (mean, CI95%):
@@ -784,7 +784,7 @@ Number of Central line day per patient (mean, CI95%):
 lapply(groups, function(x) {
   data2 %>% 
     group_by(.[[x]]) %>% 
-    group_modify(~ mean_ci_df(.x))
+    group_modify(~ mean_ci_df(.x, "nb_cl_days"))
 })
 ```
 
@@ -800,3 +800,22 @@ Total number of central line days:
 lapply2(groups, quantile2, "nb_al_days")
 ```
 
+Total number of arterial line patient-day:
+
+```{r}
+lapply(groups, function(x) {
+  data2 %>% 
+    group_by(.[[x]]) %>% 
+    summarise(patientday = sum(nb_al_days, na.rm = TRUE))
+})
+```
+
+Number of arterial line day per patient (mean, CI95%):
+
+```{r}
+lapply(groups, function(x) {
+  data2 %>% 
+    group_by(.[[x]]) %>% 
+    group_modify(~ mean_ci_df(.x, "nb_al_days"))
+})
+```
