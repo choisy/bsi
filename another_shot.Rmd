@@ -826,3 +826,13 @@ Mortality at ICU discharge:
 lapply2(groups, table2, "deathICUdis")
 ```
 
+Mortality at ICU discharge, by tetanus status:
+
+```{r}
+data2 %>% 
+  split(.$Tetanus) %>%
+  lapply2(function(x) lapply2(groups, function(group) table(x[["deathICUdis"]], x[[group]]))) %>% 
+  setNames(c("without", "with"))
+```
+
+
