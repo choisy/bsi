@@ -50,7 +50,7 @@ knitr::opts_chunk$set(margin = TRUE, prompt = TRUE, comment = "",
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
 #options(width = 137)
-options(width = 253)
+#options(width = 253)
 ```
 
 ## Packages
@@ -425,6 +425,10 @@ data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
          deathHOSdis  = OutCome < 3,
 # death at ICU discharge:
          deathICUdis  = deathHOSdis & HosDate == ICUDateFINISH,
+# death 28 days:
+         death28days  = Status28 == "Died",
+# death 90 days:
+         death90days  = Status90 == "Died",
 # other pathogen:
          otherpath    = ! is.na(SpOther))
 ```
@@ -868,3 +872,50 @@ data2 %>%
   setNames(sort(unique(data2$hospital)))
 ```
 
+Mortality at 28 days:
+
+```{r}
+lapply2(groups, table2, "death28days")
+```
+
+Mortality at 28 days, by tetanus status:
+
+```{r}
+data2 %>% 
+  split(.$Tetanus) %>%
+  lapply2(function(x) lapply2(groups, function(group) table(x[["death28days"]], x[[group]]))) %>% 
+  setNames(c("without", "with"))
+```
+
+Mortality at 28 days, by site:
+
+```{r}
+data2 %>% 
+  split(.$hospital) %>%
+  lapply2(function(x) lapply2(groups, function(group) table(x[["death28days"]], x[[group]]))) %>% 
+  setNames(sort(unique(data2$hospital)))
+```
+
+Mortality at 90 days:
+
+```{r}
+lapply2(groups, table2, "death90days")
+```
+
+Mortality at 90 days, by tetanus status:
+
+```{r}
+data2 %>% 
+  split(.$Tetanus) %>%
+  lapply2(function(x) lapply2(groups, function(group) table(x[["death90days"]], x[[group]]))) %>% 
+  setNames(c("without", "with"))
+```
+
+Mortality at 90 days, by site:
+
+```{r}
+data2 %>% 
+  split(.$hospital) %>%
+  lapply2(function(x) lapply2(groups, function(group) table(x[["death90days"]], x[[group]]))) %>% 
+  setNames(sort(unique(data2$hospital)))
+```
