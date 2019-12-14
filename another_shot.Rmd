@@ -310,8 +310,8 @@ Patients with catheter:
 
 ```{r}
 had_catheter <- data$DAILY1n2 %>% 
-  transmute(PatientNo, had_catheter = CVCCount > 0) %>% 
-  unique()
+  group_by(PatientNo) %>% 
+  summarise(had_catheter = any(CVCCount > 0))
 ```
 
 Patients at risk of CLBSI (i.e. with central line placement for at least 2
@@ -713,5 +713,11 @@ lapply(groups, function(x) {
     group_by(.[[x]]) %>% 
     summarise(patientday = sum(rand2hos, na.rm = TRUE))
 })
+```
+
+Number of patients with central line catheter during ICU:
+
+```{r}
+lapply2(groups, table2, "had_catheter")
 ```
 
