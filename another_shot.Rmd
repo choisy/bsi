@@ -794,10 +794,9 @@ Any arterial line during ICU stay from randomisation:
 lapply2(groups, table2, "had_arterial")
 ```
 
-Arterial line placed for at least 2 days within 5 days before the blood collection (n, %):
+Total number of central line days:
 
 ```{r}
-lapply2(groups, table2, "CLBSI")
+lapply2(groups, quantile2, "nb_al_days")
 ```
-
 
