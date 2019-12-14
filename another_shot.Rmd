@@ -73,6 +73,8 @@ library(tidyr)
 library(lubridate)
 library(tibble)
 library(stringr)
+library(C306)
+library(huxtable)
 ```
 
 ## Reading data
@@ -430,7 +432,10 @@ data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
 # death 90 days:
          death90days  = Status90 == "Died",
 # other pathogen:
-         otherpath    = ! is.na(SpOther))
+         otherpath    = ! is.na(SpOther),
+# transfer from other hospital:
+         otherhosp    = Source == "Other hospital"
+)
 ```
 
 ## Adding Charlson scores
@@ -586,7 +591,7 @@ data2 <- data$APAC %>%
 data2 %<>% filter(!(IsCompleted > 1 & ! IsAgree))
 ```
 
-## 2 Derivation of Table 1 on demographics
+## 2. Derivation of Table 1 on demographics
 
 ```{r}
 groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI")
@@ -919,3 +924,101 @@ data2 %>%
   lapply2(function(x) lapply2(groups, function(group) table(x[["death90days"]], x[[group]]))) %>% 
   setNames(sort(unique(data2$hospital)))
 ```
+
+`HospitalDate`: date of hospitalization
+
+`ICUDateADM`: date of ICU
+
+`ICUDateFINISH`: date of ICU discharge
+
+`HosDate`: date of hospital discharge
+
+```{r}
+data2 %>% 
+  select_if(is.Date)
+```
+
+```{r}
+data2 %>% 
+  select(PatientNo, OutCome, HospitalDate, ICUDateADM, ICUDateFINISH, HosDate, HosSame)
+```
+
+## 3. Derivation of aetiology of BSI
+
+```{r}
+
+```
+
+## Table
+
+```{r}
+remove_boolean <- function(x) {
+  sel <- which(x[, 1] == '- TRUE')
+  x[sel - 2, c(3, 5, 7)] <- x[sel, c(3, 5, 7)]
+  x[-c(sel - 1, sel), ]
+}
+```
+
+```{r}
+add_cause_admission <- function(x, causes) {
+  sel <- which(x[, 1] == causes[1])
+  nb <- x[sel, ]
+  nb[1] <- "Causes of admission"
+  nb[c(3, 5, 7)] <- ""
+  x[which(x[, 1] %in% causes), 2] <- ""
+  x <- rbind(x[1:(sel - 1), ], nb, x[sel:nrow(x), ])
+  for(i in causes) x[, 1] <- sub(i, paste("-", i), x[, 1])
+  x
+}
+```
+
+```{r}
+ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1, border_width = .8, border_color = grey(.75), strip = TRUE) {
+  # ht <- set_all_borders(ht, 1:nrow(ht), 1:ncol(ht), 0)
+  top_border(ht)[1, ] <- border_width
+  bottom_border(ht)[nrow(ht), ] <- border_width
+  for (header_row in header_rows) bold(ht)[header_row, ] <- TRUE
+  bottom_border(ht)[max(header_rows), ] <- border_width
+  for (header_col in header_cols) bold(ht)[header_col, ] <- TRUE
+  ht <- set_all_border_colors(ht, border_color)
+  if(strip) ht <- map_background_color(ht, by_rows(grey(.95), "white"))
+  ht
+}
+```
+
+
+```{r}
+data2 %>% 
+  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, apache,
+         charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD, CVA, Myo, otherpath,
+         habsi_risk, habsi, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI) %>% 
+  mutate(habsi = ifelse(habsi, "HABSI", "non-HABSI")) %>% 
+  sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy + apache +
+                   charlson_cat + Tetanus + Pneumonia + sepsis + CNS + COPD + CVA +
+                   Myo + otherpath ~ habsi,
+                   data = ., pooledGroup = TRUE, digits = 0, flextable = FALSE) %>% 
+  `$`("table") %>% 
+  as.data.frame(stringsAsFactors = FALSE) %>% 
+  remove_boolean() %>% 
+  add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>% 
+  assign("tmp", ., 1) %>% 
+  tail(., nrow(.) - 2) %>% 
+  `colnames<-`(tmp[2, ]) %>%
+  as_hux(add_rownames = FALSE, add_colnames = TRUE) %>% 
+  insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), "")) %>%
+  add_footnote("* A negative value indicates that randomisation happened before patients were intubated.") %>%
+  add_footnote("- n = number of patients included in that summary statistic.", border = 0) %>%
+  add_footnote("- Values in the form of X(A, B) are medians followed by the 25th and 75th percentiles in parentheses.", border = 0) %>%
+  set_caption("Baseline characteristics of study population.") %>%
+  set_caption_pos("bottom") %>%
+  merge_cells(1, 2:3) %>%
+  merge_cells(1, 4:5) %>%
+  merge_cells(1, 6:7) %>%
+  set_bold(2, everywhere, value = TRUE) %>%
+  set_align(1, 2, "center") %>%
+  set_align(1, 4, "center") %>%
+  set_align(2, everywhere, "center") %>%
+  set_width(1) %>%
+  ht_theme_markdown(header_rows = 1:2)
+```
+
