@@ -591,340 +591,6 @@ data2 <- data$APAC %>%
 data2 %<>% filter(!(IsCompleted > 1 & ! IsAgree))
 ```
 
-## 2. Derivation of Table 1 on demographics
-
-```{r}
-groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI")
-```
-
-```{r}
-lapply2 <- function(X, FUN, ...) setNames(lapply(X, FUN, ...), X)
-```
-
-```{r}
-table2 <- function(group, var) {
-  table(data2[[var]], data2[[group]])
-}
-```
-
-Hospital types:
-
-```{r}
-lapply2(groups, table2, "hospital")
-```
-
-Sex:
-
-```{r}
-lapply2(groups, table2, "Sex")
-```
-
-Age:
-
-```{r}
-split2 <- function(x, var) {
-  map(c(list, function(y) split(y, y[[var]])), function(f) f(x))
-}
-```
-
-```{r}
-quantile2 <- function(group, var, ...) {
-  data2 %>%
-    split2(group) %>% 
-    reduce(c) %>% 
-    lapply(function(x) quantile(x[[var]], c(.25, .5, .75), ...)) %>% 
-    setNames(c("all", "without", "with"))
-}
-```
-
-```{r}
-lapply2(groups, quantile2, "age")
-```
-
-Transfer from other hospital:
-
-```{r}
-lapply2(groups, table2, "Source")
-```
-
-Tracheostomy:
-
-```{r}
-lapply2(groups, table2, "NKQ")
-```
-
-Any tracheostomy:
-
-```{r}
-# check the definitions on pages 3, 21 and 24
-```
-
-APACHE II:
-
-```{r}
-lapply2(groups, quantile2, "apache")
-```
-
-Charlson index:
-
-```{r}
-lapply2(groups, table2, "charlson_cat")
-```
-
-Causes of admission:
-
-```{r}
-lapply2(groups, table2, "Tetanus")
-```
-
-```{r}
-# Strange that this doesn't work and we have to use the code in the following chunk...
-#lapply2(c("Tetanus", "Pneumonia"), lapply2, X = groups, FUN = table2)
-```
-
-```{r}
-lapply2(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath"),
-        function(x) lapply2(groups, table2, x))
-```
-
-Comorbidity of diabetes:
-
-```{r}
-lapply2(groups, table2, "dia_co")
-```
-
-Comorbidity of Moderate or severe liver disease:
-
-```{r}
-lapply2(groups, table2, "Mode")
-```
-
-Times:
-
-There are missing values here:
-
-```{r}
-data2 %>% 
-  select(ICUDateFINISH, RandDate, HosDate, HospitalDate) %>% 
-  lapply(function(x) any(is.na(x)))
-```
-
-So we need to deal with these missing values:
-
-```{r}
-lapply2(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"),
-        function(x) lapply2(groups, quantile2, x, na.rm = TRUE))
-```
-
-Patient-days:
-
-```{r}
-lapply(groups, function(x) {
-  data2 %>% 
-    group_by(.[[x]]) %>% 
-    summarise(patientday = sum(rand2icu, na.rm = TRUE))
-})
-```
-
-```{r}
-lapply(groups, function(x) {
-  data2 %>% 
-    group_by(.[[x]]) %>% 
-    summarise(patientday = sum(rand2hos, na.rm = TRUE))
-})
-```
-
-Number of patients with central line catheter during ICU:
-
-```{r}
-lapply2(groups, table2, "had_catheter")
-```
-
-Total number of central line days:
-
-```{r}
-lapply2(groups, quantile2, "nb_cl_days")
-```
-
-Total number of central line patient-day:
-
-```{r}
-lapply(groups, function(x) {
-  data2 %>% 
-    group_by(.[[x]]) %>% 
-    summarise(patientday = sum(nb_cl_days, na.rm = TRUE))
-})
-```
-
-The following function calculates the mean with confidence interval:
-
-```{r}
-mean_ci <- function(x) {
-  m <- lm(x ~ 1)
-  setNames(c(coef(m), confint(m)), c("estimate", "lower", "upper"))
-}
-```
-
-Let's try it:
-
-```{r}
-mean_ci(data2$nb_cl_days) %>% 
-  t() %>% 
-  as.data.frame()
-```
-
-A version of this function that takes a data frame as an input:
-
-```{r}
-mean_ci_df <- function(x, var) {
-  as.data.frame(t(mean_ci(x[[var]])))
-}
-```
-
-Let's try it:
-
-```{r}
-mean_ci_df(data2, "nb_cl_days")
-```
-
-Number of Central line day per patient (mean, CI95%):
-
-```{r}
-lapply(groups, function(x) {
-  data2 %>% 
-    group_by(.[[x]]) %>% 
-    group_modify(~ mean_ci_df(.x, "nb_cl_days"))
-})
-```
-
-Any arterial line during ICU stay from randomisation:
-
-```{r}
-lapply2(groups, table2, "had_arterial")
-```
-
-Total number of central line days:
-
-```{r}
-lapply2(groups, quantile2, "nb_al_days")
-```
-
-Total number of arterial line patient-day:
-
-```{r}
-lapply(groups, function(x) {
-  data2 %>% 
-    group_by(.[[x]]) %>% 
-    summarise(patientday = sum(nb_al_days, na.rm = TRUE))
-})
-```
-
-Number of arterial line day per patient (mean, CI95%):
-
-```{r}
-lapply(groups, function(x) {
-  data2 %>% 
-    group_by(.[[x]]) %>% 
-    group_modify(~ mean_ci_df(.x, "nb_al_days"))
-})
-```
-
-Mortality at ICU discharge:
-
-```{r}
-lapply2(groups, table2, "deathICUdis")
-```
-
-Mortality at ICU discharge, by tetanus status:
-
-```{r}
-data2 %>% 
-  split(.$Tetanus) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["deathICUdis"]], x[[group]]))) %>% 
-  setNames(c("without", "with"))
-```
-
-Mortality at ICU discharge by site:
-
-```{r}
-data2 %>% 
-  split(.$hospital) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["deathICUdis"]], x[[group]]))) %>% 
-  setNames(sort(unique(data2$hospital)))
-```
-
-Mortality at hospital discharge:
-
-```{r}
-lapply2(groups, table2, "deathHOSdis")
-```
-
-Mortality at hospital discharge, by tetanus status:
-
-```{r}
-data2 %>% 
-  split(.$Tetanus) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["deathHOSdis"]], x[[group]]))) %>% 
-  setNames(c("without", "with"))
-```
-
-Mortality at hospital discharge by site:
-
-```{r}
-data2 %>% 
-  split(.$hospital) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["deathHOSdis"]], x[[group]]))) %>% 
-  setNames(sort(unique(data2$hospital)))
-```
-
-Mortality at 28 days:
-
-```{r}
-lapply2(groups, table2, "death28days")
-```
-
-Mortality at 28 days, by tetanus status:
-
-```{r}
-data2 %>% 
-  split(.$Tetanus) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["death28days"]], x[[group]]))) %>% 
-  setNames(c("without", "with"))
-```
-
-Mortality at 28 days, by site:
-
-```{r}
-data2 %>% 
-  split(.$hospital) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["death28days"]], x[[group]]))) %>% 
-  setNames(sort(unique(data2$hospital)))
-```
-
-Mortality at 90 days:
-
-```{r}
-lapply2(groups, table2, "death90days")
-```
-
-Mortality at 90 days, by tetanus status:
-
-```{r}
-data2 %>% 
-  split(.$Tetanus) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["death90days"]], x[[group]]))) %>% 
-  setNames(c("without", "with"))
-```
-
-Mortality at 90 days, by site:
-
-```{r}
-data2 %>% 
-  split(.$hospital) %>%
-  lapply2(function(x) lapply2(groups, function(group) table(x[["death90days"]], x[[group]]))) %>% 
-  setNames(sort(unique(data2$hospital)))
-```
-
 `HospitalDate`: date of hospitalization
 
 `ICUDateADM`: date of ICU
@@ -943,13 +609,11 @@ data2 %>%
   select(PatientNo, OutCome, HospitalDate, ICUDateADM, ICUDateFINISH, HosDate, HosSame)
 ```
 
-## 3. Derivation of aetiology of BSI
+## 2. Derivation of Table 1 on demographics
 
 ```{r}
-
+groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI")
 ```
-
-## Table
 
 ```{r}
 remove_boolean <- function(x) {
@@ -973,8 +637,43 @@ add_cause_admission <- function(x, causes) {
 ```
 
 ```{r}
-ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1, border_width = .8, border_color = grey(.75), strip = TRUE) {
-  # ht <- set_all_borders(ht, 1:nrow(ht), 1:ncol(ht), 0)
+patient_day <- function(g, v, df) {
+  df %>% 
+    group_by({{ g }}) %>% 
+    summarise(pd = sum({{ v }}, na.rm = TRUE)) %>% 
+    pivot_wider(names_from = 1, values_from = pd) %>% 
+    unlist() %>% 
+    rev(.) %>% 
+    c(sum(.)) %>% 
+    `[<-`(c("patient-day", rep("", 6)), c(2, 4, 6), .)
+}
+```
+
+```{r}
+mean_ci <- function(x) {
+  m <- lm(x ~ 1)
+  paste0(round(coef(m), 2), " (", paste(round(confint(m), 2), collapse = ", "), ")")
+}
+mean_ci(data2$nb_cl_days)
+```
+
+```{r}
+day_per_patient <- function(g, v, data) {
+  data %>% 
+    group_by({{ g }}) %>% 
+    summarise(a = mean_ci({{ v }})) %>%
+    pivot_wider(names_from = 1, values_from = a) %>% 
+    unlist() %>% 
+    rev(.) %>% 
+    c(mean_ci(unlist(select(data, {{ v }})))) %>% 
+    `[<-`(c("day/patient", rep("", 6)), c(2, 4, 6), .)
+}
+```
+
+```{r}
+ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1,
+                              border_width = .8, border_color = grey(.75),
+                              strip = TRUE) {
   top_border(ht)[1, ] <- border_width
   bottom_border(ht)[nrow(ht), ] <- border_width
   for (header_row in header_rows) bold(ht)[header_row, ] <- TRUE
@@ -986,16 +685,19 @@ ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1, border_width
 }
 ```
 
-
 ```{r}
 data2 %>% 
   select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, apache,
          charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD, CVA, Myo, otherpath,
+         dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos, had_catheter, nb_cl_days, had_arterial, nb_al_days, deathICUdis, deathHOSdis, death28days, death90days,
          habsi_risk, habsi, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI) %>% 
-  mutate(habsi = ifelse(habsi, "HABSI", "non-HABSI")) %>% 
+  mutate(habsi = ifelse(habsi, "HABSI", "non-HABSI")) %>%
+  mutate_at(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"), as.integer) %>% 
   sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy + apache +
                    charlson_cat + Tetanus + Pneumonia + sepsis + CNS + COPD + CVA +
-                   Myo + otherpath ~ habsi,
+                   Myo + otherpath + dia_co + Mode + rand2icu + rand2hos + adm2icu +
+                   adm2hos + had_catheter + nb_cl_days + had_arterial + nb_al_days +
+                   deathICUdis + deathHOSdis + death28days + death90days ~ habsi,
                    data = ., pooledGroup = TRUE, digits = 0, flextable = FALSE) %>% 
   `$`("table") %>% 
   as.data.frame(stringsAsFactors = FALSE) %>% 
@@ -1003,10 +705,10 @@ data2 %>%
   add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>% 
   assign("tmp", ., 1) %>% 
   tail(., nrow(.) - 2) %>% 
+  mutate(V1 = sub("-", "-   -", V1)) %>% 
   `colnames<-`(tmp[2, ]) %>%
   as_hux(add_rownames = FALSE, add_colnames = TRUE) %>% 
   insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), "")) %>%
-  add_footnote("* A negative value indicates that randomisation happened before patients were intubated.") %>%
   add_footnote("- n = number of patients included in that summary statistic.", border = 0) %>%
   add_footnote("- Values in the form of X(A, B) are medians followed by the 25th and 75th percentiles in parentheses.", border = 0) %>%
   set_caption("Baseline characteristics of study population.") %>%
@@ -1020,5 +722,14 @@ data2 %>%
   set_align(2, everywhere, "center") %>%
   set_width(1) %>%
   ht_theme_markdown(header_rows = 1:2)
+```
+
+```{r}
+patient_day(habsi, rand2icu, data2)
+patient_day(habsi, rand2hos, data2)
+patient_day(habsi, nb_cl_days, data2)
+patient_day(habsi, nb_al_days, data2)
+day_per_patient(habsi, nb_cl_days, data2)
+day_per_patient(habsi, nb_al_days, data2)
 ```
 
