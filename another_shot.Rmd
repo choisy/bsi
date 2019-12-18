@@ -44,12 +44,12 @@ knitr::knit_hooks$set(
     options(prompt = if (options$engine %in% c("sh", "bash")) "$ " else "> ")
   })
 
-knitr::opts_chunk$set(margin = TRUE, prompt = TRUE, comment = "",
-                      collapse = TRUE, cache = FALSE, autodep = TRUE,
+knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TRUE,
+                      cache = FALSE, autodep = TRUE,
                       dev.args = list(pointsize = 11), fig.height = 3.5,
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
-#options(width = 137)
+options(width = 137)
 #options(width = 253)
 ```
 
@@ -74,10 +74,16 @@ library(lubridate)
 library(tibble)
 library(stringr)
 library(C306)
-library(huxtable)
+#library(huxtable)
 ```
 
 ## Reading data
+
+Non-eligible patients:
+
+```{r}
+non_eligible_IDs <- c("020-007", "020-012", "020-063", "003-089", "003-053", "003-110")
+```
 
 The data are in this file:
 
@@ -100,10 +106,18 @@ data <- sheets %>%
   setNames(sheets)
 ```
 
+```{r include = FALSE, eval = FALSE}
+sheets <- readxl::excel_sheets("19-8-2019-CTU16HN_Data.xls.xlsx")
+data_all <- sheets %>%
+  lapply(readxl::read_excel, path = data_file) %>% 
+  lapply(function(x) dplyr::mutate_if(x, function(y) "POSIXct" %in% class(y), as.Date)) %>% 
+  setNames(sheets)
+```
+
 
 ```{r}
 data$FINISH %<>% 
-  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>% 
+  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>% #, CompleteDate) %>% 
   mutate(IsAgree = IsAgree == "Yes") %>% 
   rename(ICUDateFINISH = ICUDate)
 ```
@@ -125,7 +139,7 @@ data$ADM %<>%
   select(PatientNo, HospitalDate, NKQ, Tetanus, Pneumonia, Sepsis, Septic, CNS,
          COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
          Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
-         Emergency, Source, Mild, Seve, ICUDate) %>% 
+         Emergency, Source, Mild, Seve, ICUDate) %>% #, Date1stIntu, Time1stIntu) %>% 
   mutate_at(c("Myo", "DiaCo", "DiaDa", "Mode", "CongI_III", "Peri", "Cere",
               "Deme", "Chro", "Conn", "Peptic", "Hemi", "ModeSeve", "Meta",
               "AIDS", "AnyMa", "CongIV", "Elective", "Emergency", "Mild", "Seve"),
@@ -158,7 +172,9 @@ Blood microbiology:
 
 ```{r}
 data$MICBLD %<>% 
-  select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2) %>% 
+  select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2,
+         IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2, IsOxac3,
+         IsESBL3, IsColistin3) %>% 
   mutate_at(c("OtherIden1", "OtherIden2"), correct_names)
 ```
 
@@ -177,7 +193,7 @@ data$DAILY1n2 %<>%
 Patient information:
 
 ```{r}
-data$ENR %<>% select(PatientNo, Sex, Age, YOB, RandDate)
+data$ENR %<>% select(PatientNo, Sex, Age, YOB, RandDate, IsTetanus) # do we need IsTetanus??? Why not. Doesn't harm...
 ```
 
 Ventilation:
@@ -200,13 +216,13 @@ data$APAC %<>%
 Follow-ups:
 
 ```{r}
-data$FU %<>% select(PatientNo, DeathDate28, Status28)
+data$FU %<>% select(PatientNo, DeathDate28, Status28, Date28) # We probably don't need this
 ```
 
 and:
 
 ```{r}
-data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90)
+data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) # We probably don't need this
 ```
 
 ## Microbiology variables (MICBLD)
@@ -424,37 +440,63 @@ data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
          adm2hos      = HosDate - HospitalDate,
          ICUstay      = ICUDateFINISH - ICUDateADM,
 # death at hospital discharge:
-         deathHOSdis  = OutCome < 3,
+#         deathHOSdis  = OutCome < 3,
 # death at ICU discharge:
-         deathICUdis  = deathHOSdis & HosDate == ICUDateFINISH,
+#         deathICUdis  = deathHOSdis & HosDate == ICUDateFINISH,
 # death 28 days:
-         death28days  = Status28 == "Died",
+#         death28days  = Status28 == "Died",
 # death 90 days:
-         death90days  = Status90 == "Died",
+#         death90days  = Status90 == "Died",
 # other pathogen:
          otherpath    = ! is.na(SpOther),
 # transfer from other hospital:
-         otherhosp    = Source == "Other hospital"
-)
+         otherhosp    = Source == "Other hospital")
 ```
+
+Nothing to worry about the 8 failed to parse.
 
 ## Adding Charlson scores
 
 Computing and adding the Charlson scores to `data2`:
 
 ```{r}
-data2 %<>% 
+charlson <- data2 %>% 
   select(PatientNo, Myo, CongI_III, Peri, Cere, Deme, Chro, Conn, Peptic,
          Mild, DiaCo, Hemi, ModeSeve, DiaDa, AnyMa, Mode, Meta, AIDS) %>% 
   mutate_all(replace_na, FALSE) %>% 
   mutate_if(is.logical, as.integer) %>% 
   mutate_at(vars(Hemi, ModeSeve, DiaDa, AnyMa), function(x) 2 * x) %>% 
   mutate_at(vars(Meta, AIDS), function(x) 6 * x) %>% 
-  mutate(Mode         = 3 * Mode,
-         charlson     = select_if(., is.numeric) %>% rowSums(),
-         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %>% as.character()) %>% 
-  select(PatientNo, charlson, charlson_cat) %>% 
-  left_join(data2, ., "PatientNo")
+  mutate(Mode         = 3 * Mode) %>% 
+  mutate(charlson     = select_if(., is.numeric) %>% rowSums(),
+         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %>% as.character())
+```
+
+Let's compare with Thinh:
+
+```{r}
+charlson_trinh <- readRDS("charlson_score.rds")
+
+setdiff(charlson$PatientNo, charlson_trinh$PatientNo)
+setdiff(charlson_trinh$PatientNo, charlson$PatientNo)
+
+marc <- charlson %>% 
+  arrange(PatientNo) %>% 
+  select(-PatientNo, -charlson_cat) %>% 
+  mutate_all(as.integer)
+
+trinh <- charlson_trinh %>% 
+  arrange(PatientNo) %>% 
+  select(-PatientNo) %>% 
+  mutate_all(as.integer)
+
+any(! unlist(map2(marc, trinh, identical)))
+```
+
+Let's add to `data2`:
+
+```{r}
+data2 %<>% left_join(select(charlson, PatientNo, charlson_cat), "PatientNo")
 ```
 
 ## Adding APACHE-II scores
@@ -489,12 +531,12 @@ apache_physio <- list(
     values = c(40, 55, 70, 110, 140, 180)),
   rr = list(
     scores = c(4, 2, 1, 0, 1, 3, 4),
-    values = c(6, 10, 25, 35, 50)),
+    values = c(6, 10, 12, 25, 35, 50)),
   pao2 = list(
-    scores = 4:0,
+    scores = c(4, 3, 1, 0),
     values = c(55, 61, 70)),
   aa_gradient = list(
-    scores = 0:4,
+    scores = c(0, 2:4),
     values = c(200, 350, 500)),
   ph = list(
     scores = c(4, 3, 2, 0, 1, 3, 4),
@@ -518,8 +560,8 @@ apache_physio <- list(
     scores = c(4, 2, 0:2, 4),
     values = c(1, 3, 15, 20, 40)),
   age = list(
-    scores = c(0, 2, 3, 5, 6),
-    values = c(45, 55, 65, 75)))
+    scores = rev(c(0, 2, 3, 5, 6)),
+    values = c(44, 54, 64, 74)))
 ```
 
 Let's generate the score functions:
@@ -539,7 +581,7 @@ head(score_fcts$temp(data$DAILY1n2$TempMax), 100)
 Computing and adding the apache scores to `data2`:
 
 ```{r}
-data2 <- data$APAC %>% 
+apache <- data$APAC %>% 
   left_join(select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency), "PatientNo") %>% 
   left_join(select(data$DAILY1n2, PatientNo, VSDate, TempMax, TempMin), c("PatientNo", "RandDate" = "VSDate")) %>% 
   mutate(a = score_fcts$temp(TempMax),
@@ -552,22 +594,35 @@ data2 <- data$APAC %>%
          a = score_fcts$rr(ResHightest),
          b = score_fcts$rr(ResLowest),
          rr_score = ifelse(a < b, b, a),
+         
          PaCO2 = ifelse(is.na(PaCO2), HCO3 / (0.03 * 10 ^ (ArterialpH - 6.1)), PaCO2),
          aa_gradient = 713 * FiO2 - PaCO2 / .8 - PaO2,
-         a_score = ifelse(is.na(aa_gradient) | FiO2 < .5, score_fcts$pao2(PaO2), score_fcts$aa_gradient(aa_gradient)),
+#         a_score = ifelse(is.na(aa_gradient) | FiO2 < .5, score_fcts$pao2(PaO2), score_fcts$aa_gradient(aa_gradient)),
+         a_score = ifelse(is.na(FiO2) | FiO2 < .5, score_fcts$pao2(PaO2), score_fcts$aa_gradient(aa_gradient)),
+         
          ph_score = ifelse(is.na(ArterialpH), score_fcts$hco3(HCO3), score_fcts$ph(ArterialpH)),
+         
          na_score = score_fcts$na(Sodium),
          k_score = score_fcts$k(Potassium),
          creatinine_score = score_fcts$creatinine(Creatinine),
          hematocrit_score = score_fcts$hematocrit(Haematocrit),
          wbc_score = score_fcts$wbc(BloodCell),
-         gcs_score = 15 - ifelse(GlasgowScore == "Preintubation",
-                                 ifelse(is.na(Motor) | is.na(Verbal) | is.na(Eyes) |
-                                          Motor == 0 | Verbal == 0   | Eyes == 0   |
-                                          Motor == 9 | Verbal == 9   | Eyes == 9,
-                                        Total,
-                                        Motor + Verbal + Eyes),
-                                 15),
+         gcs_score = ifelse(is.na(GlasgowScore),
+                            NA,
+                            15 - ifelse(GlasgowScore == "Preintubation",
+                                        ifelse(is.na(Motor) | is.na(Verbal) | is.na(Eyes) |
+                                                 Motor == 0 | Verbal == 0   | Eyes == 0   |
+                                                 Motor == 9 | Verbal == 9   | Eyes == 9,
+                                               Total,
+                                               Motor + Verbal + Eyes),
+                                        15)),
+#         gcs_score = 15 - ifelse(GlasgowScore == "Preintubation",
+#                                 ifelse(is.na(Motor) | is.na(Verbal) | is.na(Eyes) |
+#                                          Motor == 0 | Verbal == 0   | Eyes == 0   |
+#                                          Motor == 9 | Verbal == 9   | Eyes == 9,
+#                                        Total,
+#                                        Motor + Verbal + Eyes),
+#                                 15),
          age_score = score_fcts$age(age),
          c_score = ifelse(Mode + CongIV + Seve + AIDS < 1,
                           0,
@@ -577,19 +632,71 @@ data2 <- data$APAC %>%
   select(PatientNo, TempMin, TempMax, temp_score, map_score, hr_score, rr_score, a_score, ph_score, na_score, k_score,
          creatinine_score, hematocrit_score, wbc_score, gcs_score, age_score, c_score) %>% 
   mutate_all(replace_na, 0) %>% 
-  transmute(PatientNo = PatientNo,
-            apache = temp_score + map_score + hr_score + rr_score + a_score + ph_score + na_score + k_score +
+  mutate(apache = temp_score + map_score + hr_score + rr_score + a_score + ph_score + na_score + k_score +
                      creatinine_score + hematocrit_score + wbc_score + gcs_score + age_score + c_score) %>% 
-  left_join(data2, ., "PatientNo")
+  select(-TempMin, -TempMax)
 ```
 
-## Cleaning the data set
+Let's compare with Trinh:
+
+```{r}
+apache_trinh <- readRDS("apache.ii_score.rds") %>% 
+  mutate_if(is.factor, as.character)
+
+setdiff(apache$PatientNo, apache_trinh$PatientNo)
+setdiff(apache_trinh$PatientNo, apache$PatientNo)
+
+marc <- apache %>% 
+  arrange(PatientNo) %>% 
+  select(-PatientNo, -apache, -a_score, -ph_score)
+
+trinh <- apache_trinh %>% 
+  arrange(PatientNo) %>% 
+  select(-PatientNo, -aapo2, -pao2, -ph, -hco3, -total_score)
+
+trinh[] <- lapply(trinh, function(x) {x[which(is.infinite(x))] <- 0; x})
+
+#any(! unlist(map2(marc, trinh, identical)))
+unlist(map2(marc, trinh, identical))
+```
+
+```{r}
+data2 %<>% left_join(select(apache_trinh, PatientNo, total_score) %>% rename(apache = total_score), "PatientNo")
+```
+
+## Adding mortalities from Trinh
+
+```{r}
+data2 <- readRDS("death_day.full.rds") %>% 
+  mutate(death28 = Event > 0  & DOD < 29,
+         death90 = Event > 0  & DOD < 91) %>% 
+  select(PatientNo, death28, death90) %>% 
+  left_join(select(readRDS("icu_mortality.full.rds"), -IsTetanus), "PatientNo") %>% 
+  rename(deathICU = IsDeath) %>% 
+  left_join(data2, ., "PatientNo") %>% 
+  mutate(VARI = as.character(VARI) == "VARI")
+```
 
 ## Filtering the data set
 
 ```{r}
-data2 %<>% filter(!(IsCompleted > 1 & ! IsAgree))
+data2 %<>% filter(! (IsCompleted > 1 & ! IsAgree),
+                  ! PatientNo %in% non_eligible_IDs)
 ```
+
+## Cleaning the data set
+
+```{r}
+data2 %<>% 
+  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, CLBSI_risk,
+         ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
+         CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
+         had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, habsi_risk,
+         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI) %>% 
+  mutate_if(is.numeric, as.integer)
+```
+
+## Looking at the dates
 
 `HospitalDate`: date of hospitalization
 
@@ -605,19 +712,19 @@ data2 %>%
 ```
 
 ```{r}
-data2 %>% 
-  select(PatientNo, OutCome, HospitalDate, ICUDateADM, ICUDateFINISH, HosDate, HosSame)
+#data2 %>% 
+#  select(PatientNo, OutCome, HospitalDate, ICUDateADM, ICUDateFINISH, HosDate , HosSame)
 ```
 
 ## 2. Derivation of Table 1 on demographics
 
 ```{r}
-groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI")
+groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI", "Tetanus", "death at ICU discharge", "death at hospital discharge")
 ```
 
 ```{r}
 remove_boolean <- function(x) {
-  sel <- which(x[, 1] == '- TRUE')
+  sel <- which(x[, 1] == "- TRUE")
   x[sel - 2, c(3, 5, 7)] <- x[sel, c(3, 5, 7)]
   x[-c(sel - 1, sel), ]
 }
@@ -666,11 +773,34 @@ day_per_patient <- function(g, v, data) {
     unlist() %>% 
     rev(.) %>% 
     c(mean_ci(unlist(select(data, {{ v }})))) %>% 
-    `[<-`(c("day/patient", rep("", 6)), c(2, 4, 6), .)
+    `[<-`(c("day/patient", rep("", 6)), c(3, 5, 7), .) %>% 
+    `[<-`(c(2, 4, 6), group_by(data, {{ g }}) %>%
+                        tally() %>%
+                        unlist() %>%
+                        rev() %>%
+                        c(nrow(data)))
 }
 ```
 
 ```{r}
+day_per_patient <- function(g, v, data) {
+  data %>% 
+    group_by({{ g }}) %>% 
+    summarise(a = mean_ci({{ v }})) %>%
+    pivot_wider(names_from = 1, values_from = a) %>% 
+    unlist() %>% 
+    rev(.) %>% 
+    c(mean_ci(unlist(select(data, {{ v }})))) %>% 
+    `[<-`(c("day/patient", rep("", 6)), c(3, 5, 7), .) %>% 
+    `[<-`(c(2, 4, 6), group_by(data, {{ g }}) %>%
+                        tally() %>%
+                        pull() %>%
+                        rev() %>% 
+                        c(nrow(data)))
+}
+```
+
+```{r, include = FALSE, eval = FALSE}
 ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1,
                               border_width = .8, border_color = grey(.75),
                               strip = TRUE) {
@@ -687,17 +817,21 @@ ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1,
 
 ```{r}
 data2 %>% 
-  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, apache,
-         charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD, CVA, Myo, otherpath,
-         dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos, had_catheter, nb_cl_days, had_arterial, nb_al_days, deathICUdis, deathHOSdis, death28days, death90days,
-         habsi_risk, habsi, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI) %>% 
-  mutate(habsi = ifelse(habsi, "HABSI", "non-HABSI")) %>%
+#  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, CLBSI_risk,
+#         ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
+#         CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
+#         had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, deathICUdis,
+#         deathHOSdis, death28days, death90days, habsi_risk, CLBSI_risk, CLBSI,
+#         ALBSI_risk, ALBSI) %>% 
+  mutate(habsi2 = ifelse(habsi, "HABSI", "non-HABSI")) %>%
+  assign("data2tmp", ., 1) %>% 
   mutate_at(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"), as.integer) %>% 
-  sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy + apache +
-                   charlson_cat + Tetanus + Pneumonia + sepsis + CNS + COPD + CVA +
-                   Myo + otherpath + dia_co + Mode + rand2icu + rand2hos + adm2icu +
-                   adm2hos + had_catheter + nb_cl_days + had_arterial + nb_al_days +
-                   deathICUdis + deathHOSdis + death28days + death90days ~ habsi,
+  sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy +
+                   CLBSI_risk + ALBSI_risk + apache + charlson_cat + Tetanus +
+                   Pneumonia + sepsis + CNS + COPD + CVA + Myo + otherpath +
+                   dia_co + Mode + rand2icu + rand2hos + adm2icu + adm2hos +
+                   had_catheter + nb_cl_days + had_arterial + nb_al_days +
+                   habsi + deathICU + death28 + death90 ~ habsi2,
                    data = ., pooledGroup = TRUE, digits = 0, flextable = FALSE) %>% 
   `$`("table") %>% 
   as.data.frame(stringsAsFactors = FALSE) %>% 
@@ -707,29 +841,28 @@ data2 %>%
   tail(., nrow(.) - 2) %>% 
   mutate(V1 = sub("-", "-   -", V1)) %>% 
   `colnames<-`(tmp[2, ]) %>%
-  as_hux(add_rownames = FALSE, add_colnames = TRUE) %>% 
-  insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), "")) %>%
-  add_footnote("- n = number of patients included in that summary statistic.", border = 0) %>%
-  add_footnote("- Values in the form of X(A, B) are medians followed by the 25th and 75th percentiles in parentheses.", border = 0) %>%
-  set_caption("Baseline characteristics of study population.") %>%
-  set_caption_pos("bottom") %>%
-  merge_cells(1, 2:3) %>%
-  merge_cells(1, 4:5) %>%
-  merge_cells(1, 6:7) %>%
-  set_bold(2, everywhere, value = TRUE) %>%
-  set_align(1, 2, "center") %>%
-  set_align(1, 4, "center") %>%
-  set_align(2, everywhere, "center") %>%
-  set_width(1) %>%
-  ht_theme_markdown(header_rows = 1:2)
-```
-
-```{r}
-patient_day(habsi, rand2icu, data2)
-patient_day(habsi, rand2hos, data2)
-patient_day(habsi, nb_cl_days, data2)
-patient_day(habsi, nb_al_days, data2)
-day_per_patient(habsi, nb_cl_days, data2)
-day_per_patient(habsi, nb_al_days, data2)
+  as.matrix %>% 
+  rbind(reduce(list(patient_day(habsi2, rand2icu, data2tmp),
+                    patient_day(habsi2, rand2hos, data2tmp),
+                    patient_day(habsi2, nb_cl_days, data2tmp),
+                    patient_day(habsi2, nb_al_days, data2tmp),
+                    day_per_patient(habsi2, nb_cl_days, data2tmp),
+                    day_per_patient(habsi2, nb_al_days, data2tmp)), rbind)) %>% 
+  as.data.frame(stringsAsFactors = FALSE) #%>% 
+#  as_hux(add_rownames = FALSE, add_colnames = TRUE) %>% 
+#  insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), "")) %>%
+#  add_footnote("- n = number of patients included in that summary statistic.", border = 0) %>%
+#  add_footnote("- Values in the form of X(A, B) are medians followed by the 25th and 75th percentiles in parentheses.", border = 0) %>%
+#  set_caption("Baseline characteristics of study population.") %>%
+#  set_caption_pos("bottom") %>%
+#  merge_cells(1, 2:3) %>%
+#  merge_cells(1, 4:5) %>%
+#  merge_cells(1, 6:7) %>%
+#  set_bold(2, everywhere, value = TRUE) %>%
+#  set_align(1, 2, "center") %>%
+#  set_align(1, 4, "center") %>%
+#  set_align(2, everywhere, "center") %>%
+#  set_width(1) %>%
+#  ht_theme_markdown(header_rows = 1:2)
 ```
 
