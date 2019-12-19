@@ -694,7 +694,8 @@ data2 %<>%
          ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
          CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
          had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, habsi_risk,
-         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI) %>% 
+         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI,
+         nb_bsi, nb_path_bsi1) %>% 
   mutate_if(is.numeric, as.integer)
 ```
 
@@ -866,6 +867,46 @@ data2 %>%
 ```
 
 ## 3. Derivation of Aetiology of BSI
+
+Number of BSI episodes:
+
+```{r}
+list(data2 %>% 
+       group_by(nb_bsi) %>% 
+       tally(),
+     data2 %>%
+       filter(habsi) %>% 
+       group_by(nb_bsi) %>% 
+       tally(),
+     data2 %>% 
+       filter(CLBSI) %>% 
+       group_by(nb_bsi) %>% 
+       tally()) %>% 
+  reduce(left_join, "nb_bsi") %>% 
+  mutate_all(replace_na, 0) %>% 
+  setNames(c("nb BSI episodes", "all patients", "with HABSI", "with CLBSI"))
+```
+
+Number of pathogens in the first episode of BSI:
+
+```{r}
+list(data2 %>% 
+       group_by(nb_path_bsi1) %>% 
+       tally() %>% 
+       drop_na(),
+     data2 %>% 
+       filter(habsi) %>% 
+       group_by(nb_path_bsi1) %>% 
+       tally() %>% 
+       drop_na(),
+     data2 %>% 
+       filter(CLBSI) %>% 
+       group_by(nb_path_bsi1) %>% 
+       tally() %>% 
+       drop_na()) %>% 
+  reduce(left_join, "nb_path_bsi1") %>% 
+  setNames(c("nb pathog in 1st BSI", "all patients", "with HABSI", "with CLBSI"))
+```
 
 ## 4. Derivation of Frequency of BSI aetiology
 
