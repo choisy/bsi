@@ -992,12 +992,6 @@ mean_ci(data2$nb_cl_days)</code></pre>
                         c(nrow(data)))
 }</code></pre>
 <pre class="r"><code>data2 %&gt;% 
-#  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, CLBSI_risk,
-#         ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
-#         CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
-#         had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, deathICUdis,
-#         deathHOSdis, death28days, death90days, habsi_risk, CLBSI_risk, CLBSI,
-#         ALBSI_risk, ALBSI) %&gt;% 
   mutate(habsi2 = ifelse(habsi, &quot;HABSI&quot;, &quot;non-HABSI&quot;)) %&gt;%
   assign(&quot;data2tmp&quot;, ., 1) %&gt;% 
   mutate_at(c(&quot;rand2icu&quot;, &quot;rand2hos&quot;, &quot;adm2icu&quot;, &quot;adm2hos&quot;), as.integer) %&gt;% 
@@ -1022,59 +1016,64 @@ mean_ci(data2$nb_cl_days)</code></pre>
                     patient_day(habsi2, nb_cl_days, data2tmp),
                     patient_day(habsi2, nb_al_days, data2tmp),
                     day_per_patient(habsi2, nb_cl_days, data2tmp),
-                    day_per_patient(habsi2, nb_al_days, data2tmp)), rbind)) %&gt;% 
+                    day_per_patient(habsi2, nb_al_days, data2tmp)), rbind) %&gt;%
+          as_tibble() %&gt;% # to be able to use mutate()
+          mutate(V1 = c(&quot;rand2icu pd&quot;, &quot;rand2hos pd&quot;, &quot;nb_cl pd&quot;, &quot;nb_al pd&quot;, &quot;nb_cl pp&quot;, &quot;nb_al pp&quot;)) %&gt;% 
+          as.matrix()) %&gt;% # to be able to use rbind() (because column names do not match)
   as.data.frame(stringsAsFactors = FALSE) #%&gt;% </code></pre>
-<pre><code>##            Characteristic     n Summary statistic    n  Summary statistic     n Summary statistic
-## X                hospital    44                    547                      591                  
-## X.1            -   - BVTV             10/44 (23%)           125/547 (23%)           135/591 (23%)
-## X.2             -   - HTD             23/44 (52%)           271/547 (50%)           294/591 (50%)
-## X.3            -   - NHTD             11/44 (25%)           151/547 (28%)           162/591 (27%)
-## X.4                   Sex    44                    547                      591                  
-## X.5          -   - Female             10/44 (23%)           173/547 (32%)           183/591 (31%)
-## X.6            -   - Male             34/44 (77%)           374/547 (68%)           408/591 (69%)
-## X.7                   age    44       60 (43, 74)  547        58 (42, 70)   591       58 (42, 70)
-## X.8             otherhosp    44       30/44 (68%)  547      392/547 (72%)   591     422/591 (71%)
-## X.9                   NKQ    44                    547                      591                  
-## X.10          -   - mouth             25/44 (57%)           413/547 (76%)           438/591 (74%)
-## X.11   -   - tracheostomy             19/44 (43%)           134/547 (24%)           153/591 (26%)
-## X.12         tracheostomy    36       12/36 (33%)  547      429/547 (78%)   583     441/583 (76%)
-## X.13           CLBSI_risk    44       33/44 (75%)  547      285/547 (52%)   591     318/591 (54%)
-## X.14           ALBSI_risk    44       22/44 (50%)  547      131/547 (24%)   591     153/591 (26%)
-## X.15               apache    44       16 (13, 22)  537        18 (14, 22)   581       17 (13, 22)
-## X.16         charlson_cat    44                    547                      591                  
-## X.17       -   - (-Inf,0]             28/44 (64%)           333/547 (61%)           361/591 (61%)
-## X.18          -   - (0,2]              5/44 (11%)           128/547 (23%)           133/591 (23%)
-## X.19          -   - (2,4]              6/44 (14%)             38/547 (7%)             44/591 (7%)
-## X.20       -   - (4, Inf]              5/44 (11%)             48/547 (9%)             53/591 (9%)
-## X.21  Causes of admission    44                    547                      591                  
-## X.22        -   - Tetanus             22/44 (50%)  547      158/547 (29%)   591     180/591 (30%)
-## X.23      -   - Pneumonia              8/44 (18%)  547      159/547 (29%)   591     167/591 (28%)
-## X.24         -   - sepsis              6/44 (14%)  547      135/547 (25%)   591     141/591 (24%)
-## X.25            -   - CNS              5/44 (11%)  547      122/547 (22%)   591     127/591 (21%)
-## X.26           -   - COPD               0/44 (0%)  547        10/547 (2%)   591       10/591 (2%)
-## X.27            -   - CVA               0/44 (0%)  547         9/547 (2%)   591        9/591 (2%)
-## X.28            -   - Myo               1/44 (2%)  542        26/542 (5%)   586       27/586 (5%)
-## X.29      -   - otherpath               2/44 (5%)  547       64/547 (12%)   591      66/591 (11%)
-## X.30               dia_co    44       10/44 (23%)  511      133/511 (26%)   555     143/555 (26%)
-## X.31                 Mode    44         2/44 (5%)  533        14/533 (3%)   577       16/577 (3%)
-## X.32             rand2icu    44       28 (19, 48)  543         14 (6, 26)   587        15 (6, 28)
-## X.33             rand2hos    20       39 (30, 49)  240        27 (17, 37)   260       28 (18, 38)
-## X.34              adm2icu    44       30 (22, 53)  543         16 (8, 28)   587        17 (8, 29)
-## X.35              adm2hos    20       40 (33, 50)  240        29 (18, 38)   260       30 (19, 39)
-## X.36         had_catheter    44       33/44 (75%)  547      300/547 (55%)   591     333/591 (56%)
-## X.37           nb_cl_days    44         2 (0, 10)  547           2 (0, 9)   591          2 (0, 9)
-## X.38         had_arterial    44       22/44 (50%)  547      145/547 (27%)   591     167/591 (28%)
-## X.39           nb_al_days    44          0 (0, 7)  547           0 (0, 1)   591          0 (0, 2)
-## X.40                habsi    44      44/44 (100%)  547         0/547 (0%)   591       44/591 (7%)
-## X.41             deathICU    44       16/44 (36%)  547      173/547 (32%)   591     189/591 (32%)
-## X.42              death28    44        8/44 (18%)  547      168/547 (31%)   591     176/591 (30%)
-## X.43              death90    44       16/44 (36%)  547      202/547 (37%)   591     218/591 (37%)
-## out           patient-day 10104                   1584                    11688                  
-## elt           patient-day  7318                    927                     8245                  
-## elt.1         patient-day  3349                    328                     3677                  
-## elt.2         patient-day  1008                    183                     1191                  
-## elt.3         day/patient   547 6.12 (5.36, 6.89)   44 7.45 (4.33, 10.58)   591 6.22 (5.48, 6.97)
-## elt.4         day/patient   547 1.84 (1.51, 2.18)   44   4.16 (2.4, 5.92)   591 2.02 (1.68, 2.35)</code></pre>
+<pre><code>## Warning: `as_tibble.matrix()` requires a matrix with column names or a `.name_repair` argument. Using compatibility `.name_repair`.
+## This warning is displayed once per session.</code></pre>
+<pre><code>##         Characteristic     n Summary statistic    n  Summary statistic     n Summary statistic
+## 1             hospital    44                    547                      591                  
+## 2           -   - BVTV             10/44 (23%)           125/547 (23%)           135/591 (23%)
+## 3            -   - HTD             23/44 (52%)           271/547 (50%)           294/591 (50%)
+## 4           -   - NHTD             11/44 (25%)           151/547 (28%)           162/591 (27%)
+## 5                  Sex    44                    547                      591                  
+## 6         -   - Female             10/44 (23%)           173/547 (32%)           183/591 (31%)
+## 7           -   - Male             34/44 (77%)           374/547 (68%)           408/591 (69%)
+## 8                  age    44       60 (43, 74)  547        58 (42, 70)   591       58 (42, 70)
+## 9            otherhosp    44       30/44 (68%)  547      392/547 (72%)   591     422/591 (71%)
+## 10                 NKQ    44                    547                      591                  
+## 11         -   - mouth             25/44 (57%)           413/547 (76%)           438/591 (74%)
+## 12  -   - tracheostomy             19/44 (43%)           134/547 (24%)           153/591 (26%)
+## 13        tracheostomy    36       12/36 (33%)  547      429/547 (78%)   583     441/583 (76%)
+## 14          CLBSI_risk    44       33/44 (75%)  547      285/547 (52%)   591     318/591 (54%)
+## 15          ALBSI_risk    44       22/44 (50%)  547      131/547 (24%)   591     153/591 (26%)
+## 16              apache    44       16 (13, 22)  537        18 (14, 22)   581       17 (13, 22)
+## 17        charlson_cat    44                    547                      591                  
+## 18      -   - (-Inf,0]             28/44 (64%)           333/547 (61%)           361/591 (61%)
+## 19         -   - (0,2]              5/44 (11%)           128/547 (23%)           133/591 (23%)
+## 20         -   - (2,4]              6/44 (14%)             38/547 (7%)             44/591 (7%)
+## 21      -   - (4, Inf]              5/44 (11%)             48/547 (9%)             53/591 (9%)
+## 22 Causes of admission    44                    547                      591                  
+## 23       -   - Tetanus             22/44 (50%)  547      158/547 (29%)   591     180/591 (30%)
+## 24     -   - Pneumonia              8/44 (18%)  547      159/547 (29%)   591     167/591 (28%)
+## 25        -   - sepsis              6/44 (14%)  547      135/547 (25%)   591     141/591 (24%)
+## 26           -   - CNS              5/44 (11%)  547      122/547 (22%)   591     127/591 (21%)
+## 27          -   - COPD               0/44 (0%)  547        10/547 (2%)   591       10/591 (2%)
+## 28           -   - CVA               0/44 (0%)  547         9/547 (2%)   591        9/591 (2%)
+## 29           -   - Myo               1/44 (2%)  542        26/542 (5%)   586       27/586 (5%)
+## 30     -   - otherpath               2/44 (5%)  547       64/547 (12%)   591      66/591 (11%)
+## 31              dia_co    44       10/44 (23%)  511      133/511 (26%)   555     143/555 (26%)
+## 32                Mode    44         2/44 (5%)  533        14/533 (3%)   577       16/577 (3%)
+## 33            rand2icu    44       28 (19, 48)  543         14 (6, 26)   587        15 (6, 28)
+## 34            rand2hos    20       39 (30, 49)  240        27 (17, 37)   260       28 (18, 38)
+## 35             adm2icu    44       30 (22, 53)  543         16 (8, 28)   587        17 (8, 29)
+## 36             adm2hos    20       40 (33, 50)  240        29 (18, 38)   260       30 (19, 39)
+## 37        had_catheter    44       33/44 (75%)  547      300/547 (55%)   591     333/591 (56%)
+## 38          nb_cl_days    44         2 (0, 10)  547           2 (0, 9)   591          2 (0, 9)
+## 39        had_arterial    44       22/44 (50%)  547      145/547 (27%)   591     167/591 (28%)
+## 40          nb_al_days    44          0 (0, 7)  547           0 (0, 1)   591          0 (0, 2)
+## 41               habsi    44      44/44 (100%)  547         0/547 (0%)   591       44/591 (7%)
+## 42            deathICU    44       16/44 (36%)  547      173/547 (32%)   591     189/591 (32%)
+## 43             death28    44        8/44 (18%)  547      168/547 (31%)   591     176/591 (30%)
+## 44             death90    44       16/44 (36%)  547      202/547 (37%)   591     218/591 (37%)
+## 45         rand2icu pd 10104                   1584                    11688                  
+## 46         rand2hos pd  7318                    927                     8245                  
+## 47            nb_cl pd  3349                    328                     3677                  
+## 48            nb_al pd  1008                    183                     1191                  
+## 49            nb_cl pp   547 6.12 (5.36, 6.89)   44 7.45 (4.33, 10.58)   591 6.22 (5.48, 6.97)
+## 50            nb_al pp   547 1.84 (1.51, 2.18)   44   4.16 (2.4, 5.92)   591 2.02 (1.68, 2.35)</code></pre>
 <pre class="r"><code>#  as_hux(add_rownames = FALSE, add_colnames = TRUE) %&gt;% 
 #  insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), &quot;&quot;)) %&gt;%
 #  add_footnote(&quot;- n = number of patients included in that summary statistic.&quot;, border = 0) %&gt;%
