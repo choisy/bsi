@@ -381,6 +381,12 @@ summary {
 <li><a href="#looking-at-the-dates">Looking at the dates</a></li>
 </ul></li>
 <li><a href="#derivation-of-table-1-on-demographics">2. Derivation of Table 1 on demographics</a></li>
+<li><a href="#derivation-of-aetiology-of-bsi">3. Derivation of Aetiology of BSI</a></li>
+<li><a href="#derivation-of-frequency-of-bsi-aetiology">4. Derivation of Frequency of BSI aetiology</a></li>
+<li><a href="#derivation-of-bsi-incidence-rate">5. Derivation of BSI incidence rate</a></li>
+<li><a href="#risk-factors-associated-with-bsi">6. Risk factors associated with BSI</a></li>
+<li><a href="#risk-factors-associated-with-mortality">7. Risk factors associated with mortality</a></li>
+<li><a href="#kaplanmeier-analysis">8. Kaplan–Meier analysis</a></li>
 </ul>
 </div>
 
@@ -478,7 +484,15 @@ library(C306)
   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2,
          IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2, IsOxac3,
          IsESBL3, IsColistin3) %&gt;% 
-  mutate_at(c(&quot;OtherIden1&quot;, &quot;OtherIden2&quot;), correct_names)</code></pre>
+  mutate_at(vars(OtherIden1, OtherIden2), correct_names) %&gt;% 
+  mutate_at(vars(Iden1, Iden2), recode, `1` = &quot;Pseudomonas aeruginosa&quot;,
+                                        `2` = &quot;Klebsiella pneumoniae&quot;,
+                                        `3` = &quot;Staphylococcus aureus&quot;,
+                                        `4` = &quot;Acinetobacter baumanii&quot;,
+                                        `5` = &quot;Escherichia coli&quot;,
+                                        `6` = &quot;otherpath&quot;) %&gt;% 
+  mutate(Iden1 = ifelse(Iden1 == &quot;otherpath&quot;, OtherIden1, Iden1),
+         Iden2 = ifelse(Iden2 == &quot;otherpath&quot;, OtherIden2, Iden2))</code></pre>
 <p><code>HAIDate</code>: date of sampling</p>
 <p>Daily monitoring:</p>
 <pre class="r"><code>data$DAILY1n2 %&lt;&gt;% 
@@ -497,9 +511,9 @@ library(C306)
          Systolic, Diastolic, PuHightest, PuLowest, ResHightest, ResLowest, FiO2,
          PaO2, PaCO2, HCO3, ArterialpH, GlasgowScore, Motor, Verbal, Eyes, Total)</code></pre>
 <p>Follow-ups:</p>
-<pre class="r"><code>data$FU %&lt;&gt;% select(PatientNo, DeathDate28, Status28, Date28) # We probably don&#39;t need this</code></pre>
+<pre class="r"><code>data$FU %&lt;&gt;% select(PatientNo, DeathDate28, Status28, Date28) # We probably don&#39;t need this any more for now</code></pre>
 <p>and:</p>
-<pre class="r"><code>data$FU_DAY90 %&lt;&gt;% select(PatientNo, DeathDate90, Status90, Date90) # We probably don&#39;t need this</code></pre>
+<pre class="r"><code>data$FU_DAY90 %&lt;&gt;% select(PatientNo, DeathDate90, Status90, Date90) # We probably don&#39;t need this any more for now</code></pre>
 </div>
 <div id="microbiology-variables-micbld" class="section level3">
 <h3>Microbiology variables (MICBLD)</h3>
@@ -529,14 +543,14 @@ library(C306)
   sel_first_bsi()</code></pre>
 <pre><code>## # A tibble: 2 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 003-510   2016-12-15           1     6    NA Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 003-510   2016-12-29           1     6    NA Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 003-510   2016-12-15           1 Prot… &lt;NA&gt;  Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 2 003-510   2016-12-29           1 Prot… &lt;NA&gt;  Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <pre><code>## # A tibble: 1 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 003-510   2016-12-15           1     6    NA Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 003-510   2016-12-15           1 Prot… &lt;NA&gt;  Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <p>or:</p>
 <pre class="r"><code>data$MICBLD %&gt;% 
@@ -545,14 +559,14 @@ library(C306)
   sel_first_bsi()</code></pre>
 <pre><code>## # A tibble: 2 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-103   2018-10-22           1     6    NA Serratia … &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 020-103   2018-10-31           1     2    NA &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 020-103   2018-10-22           1 Serr… &lt;NA&gt;  Serratia … &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 2 020-103   2018-10-31           1 Kleb… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <pre><code>## # A tibble: 1 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-103   2018-10-22           1     6    NA Serratia … &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 020-103   2018-10-22           1 Serr… &lt;NA&gt;  Serratia … &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <p>or:</p>
 <pre class="r"><code>data$MICBLD %&gt;% 
@@ -561,16 +575,16 @@ library(C306)
   sel_first_bsi()</code></pre>
 <pre><code>## # A tibble: 4 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-526   2018-06-25           1     6    NA Burkholde… &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 020-526   2018-07-02           1     4    NA &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 3 020-526   2018-07-04           1     4    NA &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 4 020-526   2018-07-05           2     4     2 &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          NA      No      NA          NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 020-526   2018-06-25           1 Burk… &lt;NA&gt;  Burkholde… &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 2 020-526   2018-07-02           1 Acin… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 3 020-526   2018-07-04           1 Acin… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 4 020-526   2018-07-05           2 Acin… Kleb… &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          NA      No      NA          NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <pre><code>## # A tibble: 1 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-526   2018-06-25           1     6    NA Burkholde… &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 020-526   2018-06-25           1 Burk… &lt;NA&gt;  Burkholde… &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <p>or:</p>
 <pre class="r"><code>data$MICBLD %&gt;% 
@@ -579,14 +593,14 @@ library(C306)
   sel_first_bsi()</code></pre>
 <pre><code>## # A tibble: 2 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-064   2017-08-04           1     3    NA &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 103-064   2017-08-29           1     5    NA &lt;NA&gt;       &lt;NA&gt;       No      Yes     NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 103-064   2017-08-04           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 2 103-064   2017-08-29           1 Esch… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       No      Yes     NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <pre><code>## # A tibble: 1 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-064   2017-08-04           1     3    NA &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 103-064   2017-08-04           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <p>or:</p>
 <pre class="r"><code>data$MICBLD %&gt;% 
@@ -595,19 +609,17 @@ library(C306)
   sel_first_bsi()</code></pre>
 <pre><code>## # A tibble: 2 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-065   2017-09-21           1     3    NA &lt;NA&gt;       &lt;NA&gt;       No      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 103-065   2017-10-16           1     3    NA &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 103-065   2017-09-21           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       No      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+## 2 103-065   2017-10-16           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <pre><code>## # A tibble: 1 x 16
 ##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-065   2017-09-21           1     3    NA &lt;NA&gt;       &lt;NA&gt;       No      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
+## 1 103-065   2017-09-21           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       No      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
 ## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
 <p>The number of pathogen in the first BSI:</p>
 <pre class="r"><code>nb_path_bsi1 &lt;- data$MICBLD %&gt;% 
-  mutate(Iden1 = ifelse(Iden1 &gt; 5, OtherIden1, Iden1),
-         Iden2 = ifelse(Iden2 &gt; 5, OtherIden2, Iden2)) %&gt;% 
   arrange(HAIDate) %&gt;% 
   filter(OrganismsNo &gt; 0) %&gt;%
   group_by(PatientNo) %&gt;% 
@@ -617,6 +629,95 @@ library(C306)
                    unique() %&gt;% 
                    length() %&gt;% 
                    enframe(name = NULL, value = &quot;nb_path_bsi1&quot;))</code></pre>
+<div id="computing-episodes" class="section level4">
+<h4>Computing episodes</h4>
+<p>The following function replaces <code>FALSE</code> surounded by <code>TRUE</code> values by <code>TRUE</code> in a logical vector:</p>
+<pre class="r"><code>fill_gaps &lt;- function(x) {
+  as.integer(x) %&gt;% # because easier to deal with 1-character encoding
+    paste(collapse = &quot;&quot;) %&gt;% 
+    gsub(&quot;101&quot;, &quot;111&quot;, .)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>fill_gaps(c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE))</code></pre>
+<pre><code>## [1] &quot;1111001&quot;</code></pre>
+<p>The following function replaces <code>111000111100110011</code> by <code>111000222200330044</code></p>
+<pre class="r"><code>episodes &lt;- function(x) {
+  x %&lt;&gt;% 
+    strsplit(&quot;&quot;) %&gt;% 
+    unlist() %&gt;% 
+    as.integer() %&gt;% 
+    rle()
+  sel &lt;- which(x$values &gt; 0)
+  x$values[sel] &lt;- seq_along(sel)
+  inverse.rle(x)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>episodes(&quot;111000111100110011&quot;)</code></pre>
+<pre><code>##  [1] 1 1 1 0 0 0 2 2 2 2 0 0 3 3 0 0 4 4</code></pre>
+<p>In order to be able to add the <code>episode</code> variable to <code>data$MICBLD</code> we need to define the following function that computes the <code>episode</code> variable <strong>for a given patient</strong> using the <code>fill_gaps()</code> and <code>episodes()</code> accessory functions that we defined above. This episode variable tells, <strong>for a given patient</strong>, whether the episode is the first one, the second one, etc…</p>
+<pre class="r"><code>compute_episode &lt;- function(x) {
+  require(magrittr)
+  x %$% 
+    full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1)), # expanding the dates
+              data.frame(HAIDate = sort(unique(HAIDate)), A = TRUE), &quot;HAIDate&quot;) %&gt;%
+    assign(&quot;tmp1&quot;, ., 1) %&gt;% 
+    mutate(A = tidyr::replace_na(A, FALSE)) %&gt;% 
+    pull(A) %&gt;% 
+    fill_gaps() %&gt;% # episodes are considered as separate if there is more than 1 day between them
+    episodes() %&gt;% # give the ID of the episode
+    cbind(tmp1, episode = .) %&gt;%
+    left_join(x, ., &quot;HAIDate&quot;) %&gt;% 
+    select(id, episode)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>data$MICBLD %&gt;% 
+  filter(PatientNo == &quot;003-510&quot;) %&gt;% 
+  select(PatientNo, HAIDate) %&gt;% 
+  mutate(id = 13:14) %&gt;% 
+  print() %&gt;%
+  compute_episode()</code></pre>
+<pre><code>## # A tibble: 2 x 3
+##   PatientNo HAIDate       id
+##   &lt;chr&gt;     &lt;date&gt;     &lt;int&gt;
+## 1 003-510   2016-12-15    13
+## 2 003-510   2016-12-29    14</code></pre>
+<pre><code>## # A tibble: 2 x 2
+##      id episode
+##   &lt;int&gt;   &lt;int&gt;
+## 1    13       1
+## 2    14       2</code></pre>
+<p>Adding the episodes:</p>
+<pre class="r"><code>data$MICBLD %&lt;&gt;% 
+  mutate(id = dplyr::row_number()) %&gt;% # necessary for the left_join below
+  assign(&quot;tmp2&quot;, ., 1) %&gt;% # to save before the filter for subsequent merging
+  filter(OrganismsNo &gt; 0) %&gt;% # First condition: MICBLD.OrganismsNo ≥ 1
+  select(id, PatientNo, HAIDate) %&gt;% 
+  group_by(PatientNo) %&gt;% # The computation of the episodes is by patient
+  group_modify(~ compute_episode(.x)) %&gt;% # Second condition: episodes separated by more than 2 days
+  ungroup() %&gt;% 
+  select(-PatientNo) %&gt;% 
+  left_join(tmp2, ., &quot;id&quot;) %&gt;% 
+  select(-id)</code></pre>
+</div>
+<div id="etiology" class="section level4">
+<h4>Etiology</h4>
+<p>Pathogens per episode:</p>
+<pre class="r"><code>etiology &lt;- data$MICBLD %&gt;%
+  mutate(id = dplyr::row_number()) %&gt;% # necessary for the left_join below
+  assign(&quot;tmp2&quot;, ., 1) %&gt;% # to save before the filter for subsequent merging
+  group_by(PatientNo, episode) %&gt;% 
+  group_modify(~ select(.x, Iden1, Iden2) %&gt;% 
+                   unlist() %&gt;% 
+                   unique() %&gt;% 
+                   na.exclude() %&gt;% 
+                   sort() %&gt;% 
+                   paste(collapse = &quot;, &quot;) %&gt;% 
+                   as_tibble()) %&gt;% 
+  ungroup() %&gt;% 
+  filter(! is.na(episode))</code></pre>
+<pre><code>## Warning: Calling `as_tibble()` on a vector is discouraged, because the behavior is likely to change in the future. Use `tibble::enframe(name = NULL)` instead.
+## This warning is displayed once per session.</code></pre>
+</div>
 </div>
 <div id="daily-monitoring-variables-daily1n2" class="section level3">
 <h3>Daily monitoring variables (DAILY1n2)</h3>
@@ -915,7 +1016,8 @@ unlist(map2(marc, trinh, identical))</code></pre>
          ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
          CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
          had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, habsi_risk,
-         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI) %&gt;% 
+         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI,
+         nb_bsi, nb_path_bsi1) %&gt;% 
   mutate_if(is.numeric, as.integer)</code></pre>
 <pre><code>## Warning: NAs introduced by coercion to integer range</code></pre>
 </div>
@@ -1094,6 +1196,126 @@ mean_ci(data2$nb_cl_days)</code></pre>
 #  set_align(2, everywhere, &quot;center&quot;) %&gt;%
 #  set_width(1) %&gt;%
 #  ht_theme_markdown(header_rows = 1:2)</code></pre>
+</div>
+<div id="derivation-of-aetiology-of-bsi" class="section level2">
+<h2>3. Derivation of Aetiology of BSI</h2>
+<p>Number of BSI episodes:</p>
+<pre class="r"><code>list(data2 %&gt;% 
+       group_by(nb_bsi) %&gt;% 
+       tally(),
+     data2 %&gt;%
+       filter(habsi) %&gt;% 
+       group_by(nb_bsi) %&gt;% 
+       tally(),
+     data2 %&gt;% 
+       filter(CLBSI) %&gt;% 
+       group_by(nb_bsi) %&gt;% 
+       tally()) %&gt;% 
+  reduce(left_join, &quot;nb_bsi&quot;) %&gt;% 
+  mutate_all(replace_na, 0) %&gt;% 
+  setNames(c(&quot;nb BSI episodes&quot;, &quot;all patients&quot;, &quot;with HABSI&quot;, &quot;with CLBSI&quot;))</code></pre>
+<pre><code>## # A tibble: 3 x 4
+##   `nb BSI episodes` `all patients` `with HABSI` `with CLBSI`
+##               &lt;dbl&gt;          &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt;
+## 1                 0            547            0            0
+## 2                 1             39           39           26
+## 3                 2              5            5            5</code></pre>
+<p>Number of pathogens in the first episode of BSI:</p>
+<pre class="r"><code>list(data2 %&gt;% 
+       group_by(nb_path_bsi1) %&gt;% 
+       tally() %&gt;% 
+       drop_na(),
+     data2 %&gt;% 
+       filter(habsi) %&gt;% 
+       group_by(nb_path_bsi1) %&gt;% 
+       tally() %&gt;% 
+       drop_na(),
+     data2 %&gt;% 
+       filter(CLBSI) %&gt;% 
+       group_by(nb_path_bsi1) %&gt;% 
+       tally() %&gt;% 
+       drop_na()) %&gt;% 
+  reduce(left_join, &quot;nb_path_bsi1&quot;) %&gt;% 
+  setNames(c(&quot;nb pathog in 1st BSI&quot;, &quot;all patients&quot;, &quot;with HABSI&quot;, &quot;with CLBSI&quot;))</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   `nb pathog in 1st BSI` `all patients` `with HABSI` `with CLBSI`
+##                    &lt;int&gt;          &lt;int&gt;        &lt;int&gt;        &lt;int&gt;
+## 1                      2             43           43           30
+## 2                      4              1            1            1</code></pre>
+</div>
+<div id="derivation-of-frequency-of-bsi-aetiology" class="section level2">
+<h2>4. Derivation of Frequency of BSI aetiology</h2>
+<pre class="r"><code>tmp &lt;- etiology %&gt;% 
+  group_by(value) %&gt;% 
+  tally()</code></pre>
+<pre class="r"><code>tmp %&gt;%
+  filter(n &gt; 1) %&gt;% 
+  arrange(desc(n))</code></pre>
+<pre><code>## # A tibble: 8 x 2
+##   value                            n
+##   &lt;chr&gt;                        &lt;int&gt;
+## 1 Klebsiella pneumoniae           11
+## 2 Pseudomonas aeruginosa           7
+## 3 Staphylococcus aureus            5
+## 4 Acinetobacter baumanii           3
+## 5 Proteus mirabilis                3
+## 6 Escherichia coli                 2
+## 7 Staphylococcus epidermidis       2
+## 8 Stenotrophomonas maltophilia     2</code></pre>
+<pre class="r"><code>tmp %&gt;% 
+  filter(n &lt; 2) %&gt;% 
+  pull(value)</code></pre>
+<pre><code>##  [1] &quot;Acinetobacter baumanii, Klebsiella pneumoniae&quot;                              
+##  [2] &quot;Acinetobacter baumanii, Klebsiella pneumoniae, Stenotrophomonas maltophilia&quot;
+##  [3] &quot;Acinetobacter baumanii, Pseudomonas aeruginosa&quot;                             
+##  [4] &quot;Burkholderia seminalis&quot;                                                     
+##  [5] &quot;Elizabethkingia meningoseptica&quot;                                             
+##  [6] &quot;Enterococcus faecalis&quot;                                                      
+##  [7] &quot;Enterococcus faecalis, Proteus mirabilis&quot;                                   
+##  [8] &quot;Klebsiella aerogenes, Pseudomonas aeruginosa&quot;                               
+##  [9] &quot;Klebsiella oxytoca&quot;                                                         
+## [10] &quot;Providencia stuartii&quot;                                                       
+## [11] &quot;Serratia marcescens&quot;                                                        
+## [12] &quot;Staphylococcus coagulase&quot;                                                   
+## [13] &quot;Staphylococcus haemolyticus&quot;                                                
+## [14] &quot;Staphylococcus xylosus&quot;</code></pre>
+<pre class="r"><code>tmp &lt;- etiology %&gt;%
+  separate_rows(value, sep = &quot;, &quot;) %&gt;% 
+  group_by(value) %&gt;% 
+  tally()</code></pre>
+<pre class="r"><code>tmp %&gt;%
+  filter(n &gt; 1) %&gt;% 
+  arrange(desc(n))</code></pre>
+<pre><code>## # A tibble: 9 x 2
+##   value                            n
+##   &lt;chr&gt;                        &lt;int&gt;
+## 1 Klebsiella pneumoniae           13
+## 2 Pseudomonas aeruginosa           9
+## 3 Acinetobacter baumanii           6
+## 4 Staphylococcus aureus            5
+## 5 Proteus mirabilis                4
+## 6 Stenotrophomonas maltophilia     3
+## 7 Enterococcus faecalis            2
+## 8 Escherichia coli                 2
+## 9 Staphylococcus epidermidis       2</code></pre>
+<pre class="r"><code>tmp %&gt;% 
+  filter(n &lt; 2) %&gt;% 
+  pull(value)</code></pre>
+<pre><code>## [1] &quot;Burkholderia seminalis&quot;         &quot;Elizabethkingia meningoseptica&quot; &quot;Klebsiella aerogenes&quot;           &quot;Klebsiella oxytoca&quot;            
+## [5] &quot;Providencia stuartii&quot;           &quot;Serratia marcescens&quot;            &quot;Staphylococcus coagulase&quot;       &quot;Staphylococcus haemolyticus&quot;   
+## [9] &quot;Staphylococcus xylosus&quot;</code></pre>
+</div>
+<div id="derivation-of-bsi-incidence-rate" class="section level2">
+<h2>5. Derivation of BSI incidence rate</h2>
+</div>
+<div id="risk-factors-associated-with-bsi" class="section level2">
+<h2>6. Risk factors associated with BSI</h2>
+</div>
+<div id="risk-factors-associated-with-mortality" class="section level2">
+<h2>7. Risk factors associated with mortality</h2>
+</div>
+<div id="kaplanmeier-analysis" class="section level2">
+<h2>8. Kaplan–Meier analysis</h2>
 </div>
 
 

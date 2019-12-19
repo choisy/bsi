@@ -177,7 +177,15 @@ data$MICBLD %<>%
   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2,
          IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2, IsOxac3,
          IsESBL3, IsColistin3) %>% 
-  mutate_at(c("OtherIden1", "OtherIden2"), correct_names)
+  mutate_at(vars(OtherIden1, OtherIden2), correct_names) %>% 
+  mutate_at(vars(Iden1, Iden2), recode, `1` = "Pseudomonas aeruginosa",
+                                        `2` = "Klebsiella pneumoniae",
+                                        `3` = "Staphylococcus aureus",
+                                        `4` = "Acinetobacter baumanii",
+                                        `5` = "Escherichia coli",
+                                        `6` = "otherpath") %>% 
+  mutate(Iden1 = ifelse(Iden1 == "otherpath", OtherIden1, Iden1),
+         Iden2 = ifelse(Iden2 == "otherpath", OtherIden2, Iden2))
 ```
 
 `HAIDate`: date of sampling
@@ -218,13 +226,13 @@ data$APAC %<>%
 Follow-ups:
 
 ```{r}
-data$FU %<>% select(PatientNo, DeathDate28, Status28, Date28) # We probably don't need this
+data$FU %<>% select(PatientNo, DeathDate28, Status28, Date28) # We probably don't need this any more for now
 ```
 
 and:
 
 ```{r}
-data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) # We probably don't need this
+data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) # We probably don't need this any more for now
 ```
 
 ### Microbiology variables (MICBLD)
@@ -311,8 +319,6 @@ The number of pathogen in the first BSI:
 
 ```{r}
 nb_path_bsi1 <- data$MICBLD %>% 
-  mutate(Iden1 = ifelse(Iden1 > 5, OtherIden1, Iden1),
-         Iden2 = ifelse(Iden2 > 5, OtherIden2, Iden2)) %>% 
   arrange(HAIDate) %>% 
   filter(OrganismsNo > 0) %>%
   group_by(PatientNo) %>% 
@@ -322,6 +328,116 @@ nb_path_bsi1 <- data$MICBLD %>%
                    unique() %>% 
                    length() %>% 
                    enframe(name = NULL, value = "nb_path_bsi1"))
+```
+
+#### Computing episodes
+
+The following function replaces `FALSE` surounded by `TRUE` values by `TRUE` in
+a logical vector:
+
+```{r}
+fill_gaps <- function(x) {
+  as.integer(x) %>% # because easier to deal with 1-character encoding
+    paste(collapse = "") %>% 
+    gsub("101", "111", .)
+}
+```
+
+Let's try it:
+
+```{r}
+fill_gaps(c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE))
+```
+
+The following function replaces `111000111100110011` by `111000222200330044`
+
+```{r}
+episodes <- function(x) {
+  x %<>% 
+    strsplit("") %>% 
+    unlist() %>% 
+    as.integer() %>% 
+    rle()
+  sel <- which(x$values > 0)
+  x$values[sel] <- seq_along(sel)
+  inverse.rle(x)
+}
+```
+
+Let's try it:
+
+```{r}
+episodes("111000111100110011")
+```
+
+In order to be able to add the `episode` variable to `data$MICBLD` we need to
+define the following function that computes the `episode` variable **for a given
+patient** using the `fill_gaps()` and `episodes()` accessory functions that we
+defined above. This episode variable tells, **for a given patient**, whether the
+episode is the first one, the second one, etc...
+
+```{r}
+compute_episode <- function(x) {
+  require(magrittr)
+  x %$% 
+    full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1)), # expanding the dates
+              data.frame(HAIDate = sort(unique(HAIDate)), A = TRUE), "HAIDate") %>%
+    assign("tmp1", ., 1) %>% 
+    mutate(A = tidyr::replace_na(A, FALSE)) %>% 
+    pull(A) %>% 
+    fill_gaps() %>% # episodes are considered as separate if there is more than 1 day between them
+    episodes() %>% # give the ID of the episode
+    cbind(tmp1, episode = .) %>%
+    left_join(x, ., "HAIDate") %>% 
+    select(id, episode)
+}
+```
+
+Let's try it:
+
+```{r}
+data$MICBLD %>% 
+  filter(PatientNo == "003-510") %>% 
+  select(PatientNo, HAIDate) %>% 
+  mutate(id = 13:14) %>% 
+  print() %>%
+  compute_episode()
+```
+
+Adding the episodes:
+
+```{r}
+data$MICBLD %<>% 
+  mutate(id = dplyr::row_number()) %>% # necessary for the left_join below
+  assign("tmp2", ., 1) %>% # to save before the filter for subsequent merging
+  filter(OrganismsNo > 0) %>% # First condition: MICBLD.OrganismsNo ≥ 1
+  select(id, PatientNo, HAIDate) %>% 
+  group_by(PatientNo) %>% # The computation of the episodes is by patient
+  group_modify(~ compute_episode(.x)) %>% # Second condition: episodes separated by more than 2 days
+  ungroup() %>% 
+  select(-PatientNo) %>% 
+  left_join(tmp2, ., "id") %>% 
+  select(-id)
+```
+
+#### Etiology
+
+Pathogens per episode:
+
+```{r}
+etiology <- data$MICBLD %>%
+  mutate(id = dplyr::row_number()) %>% # necessary for the left_join below
+  assign("tmp2", ., 1) %>% # to save before the filter for subsequent merging
+  group_by(PatientNo, episode) %>% 
+  group_modify(~ select(.x, Iden1, Iden2) %>% 
+                   unlist() %>% 
+                   unique() %>% 
+                   na.exclude() %>% 
+                   sort() %>% 
+                   paste(collapse = ", ") %>% 
+                   as_tibble()) %>% 
+  ungroup() %>% 
+  filter(! is.na(episode))
 ```
 
 ### Daily monitoring variables (DAILY1n2)
@@ -909,6 +1025,43 @@ list(data2 %>%
 ```
 
 ## 4. Derivation of Frequency of BSI aetiology
+
+```{r}
+tmp <- etiology %>% 
+  group_by(value) %>% 
+  tally()
+```
+
+```{r}
+tmp %>%
+  filter(n > 1) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+tmp %>% 
+  filter(n < 2) %>% 
+  pull(value)
+```
+
+```{r}
+tmp <- etiology %>%
+  separate_rows(value, sep = ", ") %>% 
+  group_by(value) %>% 
+  tally()
+```
+
+```{r}
+tmp %>%
+  filter(n > 1) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+tmp %>% 
+  filter(n < 2) %>% 
+  pull(value)
+```
 
 ## 5. Derivation of BSI incidence rate
 
