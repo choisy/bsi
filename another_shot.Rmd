@@ -53,7 +53,7 @@ options(width = 137)
 #options(width = 253)
 ```
 
-## Packages
+## 0. Packages
 
 Installing the required packages:
 
@@ -77,7 +77,9 @@ library(C306)
 #library(huxtable)
 ```
 
-## Reading data
+## 1. Putting the data in shape
+
+### Reading data
 
 Non-eligible patients:
 
@@ -225,7 +227,7 @@ and:
 data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) # We probably don't need this
 ```
 
-## Microbiology variables (MICBLD)
+### Microbiology variables (MICBLD)
 
 Patients with BSI, showing the date of the first BSI episode:
 
@@ -322,7 +324,7 @@ nb_path_bsi1 <- data$MICBLD %>%
                    enframe(name = NULL, value = "nb_path_bsi1"))
 ```
 
-## Daily monitoring variables (DAILY1n2)
+### Daily monitoring variables (DAILY1n2)
 
 Patients with catheter:
 
@@ -397,7 +399,7 @@ nb_al_days <- left_join(data$DAILY1n2, first_bsi, "PatientNo") %>%
   rename(nb_al_days = n)
 ```
 
-## Other variables
+### Other variables
 
 Need to be calculated now because the calculation of APACHE-II need the age
 variable that is calculated here.
@@ -455,7 +457,7 @@ data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
 
 Nothing to worry about the 8 failed to parse.
 
-## Adding Charlson scores
+### Adding Charlson scores
 
 Computing and adding the Charlson scores to `data2`:
 
@@ -499,7 +501,7 @@ Let's add to `data2`:
 data2 %<>% left_join(select(charlson, PatientNo, charlson_cat), "PatientNo")
 ```
 
-## Adding APACHE-II scores
+### Adding APACHE-II scores
 
 The Apache-II Score provides an estimate of ICU mortality based on a number of
 laboratory values and patient signs taking both acute and chronic disease into
@@ -664,7 +666,7 @@ unlist(map2(marc, trinh, identical))
 data2 %<>% left_join(select(apache_trinh, PatientNo, total_score) %>% rename(apache = total_score), "PatientNo")
 ```
 
-## Adding mortalities from Trinh
+### Adding mortalities from Trinh
 
 ```{r}
 data2 <- readRDS("death_day.full.rds") %>% 
@@ -677,14 +679,14 @@ data2 <- readRDS("death_day.full.rds") %>%
   mutate(VARI = as.character(VARI) == "VARI")
 ```
 
-## Filtering the data set
+### Filtering the data set
 
 ```{r}
 data2 %<>% filter(! (IsCompleted > 1 & ! IsAgree),
                   ! PatientNo %in% non_eligible_IDs)
 ```
 
-## Cleaning the data set
+### Cleaning the data set
 
 ```{r}
 data2 %<>% 
@@ -696,7 +698,7 @@ data2 %<>%
   mutate_if(is.numeric, as.integer)
 ```
 
-## Looking at the dates
+### Looking at the dates
 
 `HospitalDate`: date of hospitalization
 

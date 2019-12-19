@@ -367,7 +367,8 @@ summary {
 
 <div id="TOC">
 <ul>
-<li><a href="#packages">Packages</a></li>
+<li><a href="#packages">0. Packages</a></li>
+<li><a href="#putting-the-data-in-shape">1. Putting the data in shape</a><ul>
 <li><a href="#reading-data">Reading data</a></li>
 <li><a href="#microbiology-variables-micbld">Microbiology variables (MICBLD)</a></li>
 <li><a href="#daily-monitoring-variables-daily1n2">Daily monitoring variables (DAILY1n2)</a></li>
@@ -378,6 +379,7 @@ summary {
 <li><a href="#filtering-the-data-set">Filtering the data set</a></li>
 <li><a href="#cleaning-the-data-set">Cleaning the data set</a></li>
 <li><a href="#looking-at-the-dates">Looking at the dates</a></li>
+</ul></li>
 <li><a href="#derivation-of-table-1-on-demographics">2. Derivation of Table 1 on demographics</a></li>
 </ul>
 </div>
@@ -403,7 +405,7 @@ title wherever you want to display the reference list.
 }
 </style>
 <div id="packages" class="section level2">
-<h2>Packages</h2>
+<h2>0. Packages</h2>
 <p>Installing the required packages:</p>
 <pre class="r"><code>required &lt;- c(&quot;dplyr&quot;, &quot;lubridate&quot;, &quot;magrittr&quot;, &quot;purrr&quot;, &quot;readxl&quot;, &quot;tibble&quot;, &quot;tidyr&quot;)
 to_install &lt;- setdiff(required, row.names(installed.packages()))
@@ -419,8 +421,10 @@ library(stringr)
 library(C306)
 #library(huxtable)</code></pre>
 </div>
-<div id="reading-data" class="section level2">
-<h2>Reading data</h2>
+<div id="putting-the-data-in-shape" class="section level2">
+<h2>1. Putting the data in shape</h2>
+<div id="reading-data" class="section level3">
+<h3>Reading data</h3>
 <p>Non-eligible patients:</p>
 <pre class="r"><code>non_eligible_IDs &lt;- c(&quot;020-007&quot;, &quot;020-012&quot;, &quot;020-063&quot;, &quot;003-089&quot;, &quot;003-053&quot;, &quot;003-110&quot;)</code></pre>
 <p>The data are in this file:</p>
@@ -497,8 +501,8 @@ library(C306)
 <p>and:</p>
 <pre class="r"><code>data$FU_DAY90 %&lt;&gt;% select(PatientNo, DeathDate90, Status90, Date90) # We probably don&#39;t need this</code></pre>
 </div>
-<div id="microbiology-variables-micbld" class="section level2">
-<h2>Microbiology variables (MICBLD)</h2>
+<div id="microbiology-variables-micbld" class="section level3">
+<h3>Microbiology variables (MICBLD)</h3>
 <p>Patients with BSI, showing the date of the first BSI episode:</p>
 <pre class="r"><code>first_bsi &lt;- data$MICBLD %&gt;% 
   filter(OrganismsNo &gt; 0) %&gt;% 
@@ -614,8 +618,8 @@ library(C306)
                    length() %&gt;% 
                    enframe(name = NULL, value = &quot;nb_path_bsi1&quot;))</code></pre>
 </div>
-<div id="daily-monitoring-variables-daily1n2" class="section level2">
-<h2>Daily monitoring variables (DAILY1n2)</h2>
+<div id="daily-monitoring-variables-daily1n2" class="section level3">
+<h3>Daily monitoring variables (DAILY1n2)</h3>
 <p>Patients with catheter:</p>
 <pre class="r"><code>had_catheter &lt;- data$DAILY1n2 %&gt;% 
   group_by(PatientNo) %&gt;% 
@@ -657,8 +661,8 @@ library(C306)
   tally() %&gt;% 
   rename(nb_al_days = n)</code></pre>
 </div>
-<div id="other-variables" class="section level2">
-<h2>Other variables</h2>
+<div id="other-variables" class="section level3">
+<h3>Other variables</h3>
 <p>Need to be calculated now because the calculation of APACHE-II need the age variable that is calculated here.</p>
 <pre class="r"><code>data2 &lt;- c(data[setdiff(names(data), c(&quot;DAILY1n2&quot;, &quot;MICBLD&quot;))],
            list(first_bsi, clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days,
@@ -711,8 +715,8 @@ library(C306)
 <pre><code>## Warning: 8 failed to parse.</code></pre>
 <p>Nothing to worry about the 8 failed to parse.</p>
 </div>
-<div id="adding-charlson-scores" class="section level2">
-<h2>Adding Charlson scores</h2>
+<div id="adding-charlson-scores" class="section level3">
+<h3>Adding Charlson scores</h3>
 <p>Computing and adding the Charlson scores to <code>data2</code>:</p>
 <pre class="r"><code>charlson &lt;- data2 %&gt;% 
   select(PatientNo, Myo, CongI_III, Peri, Cere, Deme, Chro, Conn, Peptic,
@@ -746,8 +750,8 @@ any(! unlist(map2(marc, trinh, identical)))</code></pre>
 <p>Let’s add to <code>data2</code>:</p>
 <pre class="r"><code>data2 %&lt;&gt;% left_join(select(charlson, PatientNo, charlson_cat), &quot;PatientNo&quot;)</code></pre>
 </div>
-<div id="adding-apache-ii-scores" class="section level2">
-<h2>Adding APACHE-II scores</h2>
+<div id="adding-apache-ii-scores" class="section level3">
+<h3>Adding APACHE-II scores</h3>
 <p>The Apache-II Score provides an estimate of ICU mortality based on a number of laboratory values and patient signs taking both acute and chronic disease into account.</p>
 <p><strong>Note:</strong> The data used should relate to the 24 hours prior to randomisation and the worst (highest scoring) recorded values should be used.</p>
 <p>This function below computes score functions:</p>
@@ -888,8 +892,8 @@ unlist(map2(marc, trinh, identical))</code></pre>
 ##             TRUE            FALSE            FALSE            FALSE</code></pre>
 <pre class="r"><code>data2 %&lt;&gt;% left_join(select(apache_trinh, PatientNo, total_score) %&gt;% rename(apache = total_score), &quot;PatientNo&quot;)</code></pre>
 </div>
-<div id="adding-mortalities-from-trinh" class="section level2">
-<h2>Adding mortalities from Trinh</h2>
+<div id="adding-mortalities-from-trinh" class="section level3">
+<h3>Adding mortalities from Trinh</h3>
 <pre class="r"><code>data2 &lt;- readRDS(&quot;death_day.full.rds&quot;) %&gt;% 
   mutate(death28 = Event &gt; 0  &amp; DOD &lt; 29,
          death90 = Event &gt; 0  &amp; DOD &lt; 91) %&gt;% 
@@ -899,13 +903,13 @@ unlist(map2(marc, trinh, identical))</code></pre>
   left_join(data2, ., &quot;PatientNo&quot;) %&gt;% 
   mutate(VARI = as.character(VARI) == &quot;VARI&quot;)</code></pre>
 </div>
-<div id="filtering-the-data-set" class="section level2">
-<h2>Filtering the data set</h2>
+<div id="filtering-the-data-set" class="section level3">
+<h3>Filtering the data set</h3>
 <pre class="r"><code>data2 %&lt;&gt;% filter(! (IsCompleted &gt; 1 &amp; ! IsAgree),
                   ! PatientNo %in% non_eligible_IDs)</code></pre>
 </div>
-<div id="cleaning-the-data-set" class="section level2">
-<h2>Cleaning the data set</h2>
+<div id="cleaning-the-data-set" class="section level3">
+<h3>Cleaning the data set</h3>
 <pre class="r"><code>data2 %&lt;&gt;% 
   select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, CLBSI_risk,
          ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
@@ -915,8 +919,8 @@ unlist(map2(marc, trinh, identical))</code></pre>
   mutate_if(is.numeric, as.integer)</code></pre>
 <pre><code>## Warning: NAs introduced by coercion to integer range</code></pre>
 </div>
-<div id="looking-at-the-dates" class="section level2">
-<h2>Looking at the dates</h2>
+<div id="looking-at-the-dates" class="section level3">
+<h3>Looking at the dates</h3>
 <p><code>HospitalDate</code>: date of hospitalization</p>
 <p><code>ICUDateADM</code>: date of ICU</p>
 <p><code>ICUDateFINISH</code>: date of ICU discharge</p>
@@ -926,6 +930,7 @@ unlist(map2(marc, trinh, identical))</code></pre>
 <pre><code>## # A tibble: 591 x 0</code></pre>
 <pre class="r"><code>#data2 %&gt;% 
 #  select(PatientNo, OutCome, HospitalDate, ICUDateADM, ICUDateFINISH, HosDate , HosSame)</code></pre>
+</div>
 </div>
 <div id="derivation-of-table-1-on-demographics" class="section level2">
 <h2>2. Derivation of Table 1 on demographics</h2>
