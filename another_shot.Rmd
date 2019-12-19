@@ -865,3 +865,14 @@ data2 %>%
 #  ht_theme_markdown(header_rows = 1:2)
 ```
 
+## 3. Derivation of Aetiology of BSI
+
+## 4. Derivation of Frequency of BSI aetiology
+
+## 5. Derivation of BSI incidence rate
+
+## 6. Risk factors associated with BSI
+
+## 7. Risk factors associated with mortality
+
+## 8. Kaplan–Meier analysis
