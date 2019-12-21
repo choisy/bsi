@@ -79,14 +79,15 @@ library(C306)
 
 ## 1. Putting the data in shape
 
-### Reading data
-
-Non-eligible patients:
+### Accessory functions
 
 ```{r}
-non_eligible_IDs <- c("020-007", "020-012", "020-063", "003-089", "003-053", "003-110")
+yesno2bool <- function(x) {
+  na_if(x, "NA") == "Yes"
+}
 ```
 
+### Reading data
 The data are in this file:
 
 ```{r}
@@ -97,6 +98,12 @@ The list of sheets that we are interested in:
 
 ```{r}
 sheets <- c("ADM", "AIR", "APAC", "DAILY1n2", "ENR", "FINISH", "FU", "FU_DAY90", "MICBLD")
+```
+
+Non-eligible patients:
+
+```{r}
+non_eligible_IDs <- c("020-007", "020-012", "020-063", "003-089", "003-053", "003-110")
 ```
 
 Reading all the sheets of this file and transforming the dates:
@@ -116,12 +123,12 @@ data_all <- sheets %>%
   setNames(sheets)
 ```
 
-
 ```{r}
 data$FINISH %<>% 
-  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>% #, CompleteDate) %>% 
-  mutate(IsAgree = IsAgree == "Yes") %>% 
-  rename(ICUDateFINISH = ICUDate)
+  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>%
+  mutate_at("IsAgree", yesno2bool) %>% 
+  rename(ICUDateFINISH = ICUDate) %>% 
+  distinct()
 ```
 
 `IsComplete == 1`: completed until discharge or death
@@ -141,12 +148,12 @@ data$ADM %<>%
   select(PatientNo, HospitalDate, NKQ, Tetanus, Pneumonia, Sepsis, Septic, CNS,
          COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
          Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
-         Emergency, Source, Mild, Seve, ICUDate) %>% #, Date1stIntu, Time1stIntu) %>% 
-  mutate_at(c("Myo", "DiaCo", "DiaDa", "Mode", "CongI_III", "Peri", "Cere",
-              "Deme", "Chro", "Conn", "Peptic", "Hemi", "ModeSeve", "Meta",
-              "AIDS", "AnyMa", "CongIV", "Elective", "Emergency", "Mild", "Seve"),
-            function(x) dplyr::na_if(x, "NA") == "Yes") %>% 
-  rename(ICUDateADM = ICUDate)
+         Emergency, Source, Mild, Seve, ICUDate) %>%
+  mutate_at(vars(Myo, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme, Chro, Conn,
+                 Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
+                 Emergency, Mild, Seve), yesno2bool) %>% 
+  rename(ICUDateADM = ICUDate) %>% 
+  distinct()
 ```
 
 The following function corrects the names of the bacteria:
@@ -175,8 +182,8 @@ Blood microbiology:
 ```{r}
 data$MICBLD %<>% 
   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2,
-         IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2, IsOxac3,
-         IsESBL3, IsColistin3) %>% 
+         IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2) %>% 
+  mutate_at(vars(IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2), yesno2bool) %>% 
   mutate_at(vars(OtherIden1, OtherIden2), correct_names) %>% 
   mutate_at(vars(Iden1, Iden2), recode, `1` = "Pseudomonas aeruginosa",
                                         `2` = "Klebsiella pneumoniae",
@@ -185,7 +192,14 @@ data$MICBLD %<>%
                                         `5` = "Escherichia coli",
                                         `6` = "otherpath") %>% 
   mutate(Iden1 = ifelse(Iden1 == "otherpath", OtherIden1, Iden1),
-         Iden2 = ifelse(Iden2 == "otherpath", OtherIden2, Iden2))
+         Iden2 = ifelse(Iden2 == "otherpath", OtherIden2, Iden2),
+         condition = Iden1 < Iden2,
+         Iden1b = ifelse(condition, Iden1, Iden2),
+         Iden2b = ifelse(condition, Iden2, Iden1)) %>% 
+  unite("pathogens", Iden1b, Iden2b, sep = ", ") %>% 
+  mutate(pathogens = ifelse(pathogens == "NA, NA", Iden1, pathogens)) %>% 
+  select(-OtherIden1, -OtherIden2, -condition) %>% 
+  distinct()
 ```
 
 `HAIDate`: date of sampling
@@ -195,7 +209,8 @@ Daily monitoring:
 ```{r}
 data$DAILY1n2 %<>% 
   select(PatientNo, CVCCount, VSDate, Arterial, TempMax, TempMin) %>% 
-  mutate(Arterial = Arterial == "Yes")
+  mutate_at("Arterial", yesno2bool) %>% 
+  distinct()
 ```
 
 `CVCCount`: number of central venous catheters.
@@ -203,7 +218,8 @@ data$DAILY1n2 %<>%
 Patient information:
 
 ```{r}
-data$ENR %<>% select(PatientNo, Sex, Age, YOB, RandDate, IsTetanus) # do we need IsTetanus??? Why not. Doesn't harm...
+data$ENR %<>% select(PatientNo, Sex, Age, YOB, RandDate) %>% 
+  distinct()
 ```
 
 Ventilation:
@@ -211,7 +227,8 @@ Ventilation:
 ```{r}
 data$AIR %<>% 
   select(PatientNo, IsTrach, TrachDate) %>% 
-  mutate(IsTrach = IsTrach == "Yes")
+  mutate_at("IsTrach", yesno2bool) %>% 
+  distinct()
 ```
 
 Apache code variables:
@@ -220,22 +237,60 @@ Apache code variables:
 data$APAC %<>% 
   select(PatientNo, HbA1c, Sodium, Potassium, Creatinine, Haematocrit, BloodCell,
          Systolic, Diastolic, PuHightest, PuLowest, ResHightest, ResLowest, FiO2,
-         PaO2, PaCO2, HCO3, ArterialpH, GlasgowScore, Motor, Verbal, Eyes, Total)
+         PaO2, PaCO2, HCO3, ArterialpH, GlasgowScore, Motor, Verbal, Eyes, Total) %>% 
+  distinct()
 ```
 
 Follow-ups:
 
 ```{r}
-data$FU %<>% select(PatientNo, DeathDate28, Status28, Date28) # We probably don't need this any more for now
+data$FU %<>% select(PatientNo, DeathDate28, Status28, Date28) %>% # We probably don't need this any more for now
+  distinct()
 ```
 
 and:
 
 ```{r}
-data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) # We probably don't need this any more for now
+data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) %>% # We probably don't need this any more for now
+  distinct()
 ```
 
 ### Microbiology variables (MICBLD)
+
+The following function adds the episode variable:
+
+```{r}
+add_episode <- function(x) {
+# it's not clear why the filter() / right_join() doesn't work here and has to be
+# after the group_modify() call below.
+  x %>% 
+#    filter(OrganismsNo > 0) %>% 
+    add_column(episode = cumsum(c(1, ! (diff(.$HAIDate) < 2 | (diff(.$HAIDate) < 3 & diff(as.integer(as.factor(.$pathogens))) < 1)))))# %>% 
+#    right_join(select(x, PatientNo, HAIDate))
+}
+```
+
+Let's try it:
+
+```{r}
+data$MICBLD %>% 
+  filter(OrganismsNo > 0) %>% 
+  arrange(HAIDate) %>% 
+  filter(PatientNo == "020-526") %>% 
+  add_episode()
+```
+
+Let's add it to the whole data set:
+
+```{r}
+data$MICBLD %<>% 
+  filter(OrganismsNo > 0) %>% 
+  arrange(HAIDate) %>% 
+  group_by(PatientNo) %>% 
+  group_modify(~ add_episode(.x)) %>% 
+  ungroup() %>% 
+  right_join(select(data$MICBLD, PatientNo, HAIDate), c("PatientNo", "HAIDate"))
+```
 
 Patients with BSI, showing the date of the first BSI episode:
 
@@ -252,192 +307,17 @@ Numbers of BSI episodes:
 ```{r}
 nb_bsi <- data$MICBLD %>% 
   filter(OrganismsNo > 0) %>% 
-  arrange(HAIDate) %>% 
   group_by(PatientNo) %>% 
-  summarise(nb_bsi = 1 + sum(diff(HAIDate) > 2))
+  summarise(nb_bsi = length(unique(episode)))
 ```
 
 Number of pathogens in the first episode of BSI:
 
-The following function selects the rows of a patient subset of a `MICBLD` data
-frame that correspond to the first episode:
-
-```{r}
-sel_first_bsi <- function(x) {
-  sel <- which(diff(x$HAIDate) > 2)
-  if (length(sel) > 0) return(x[seq_len(sel[1]), ])
-  x
-}
-```
-
-Let's try it:
-
-```{r}
-data$MICBLD %>% 
-  filter(OrganismsNo > 0, PatientNo == "003-510") %>% 
-  print() %>% 
-  sel_first_bsi()
-```
-
-or:
-
-```{r}
-data$MICBLD %>% 
-  filter(OrganismsNo > 0, PatientNo == "020-103") %>% 
-  print() %>% 
-  sel_first_bsi()
-```
-
-or:
-
-```{r}
-data$MICBLD %>% 
-  filter(OrganismsNo > 0, PatientNo == "020-526") %>% 
-  print() %>% 
-  sel_first_bsi()
-```
-
-or:
-
-```{r}
-data$MICBLD %>% 
-  filter(OrganismsNo > 0, PatientNo == "103-064") %>% 
-  print() %>% 
-  sel_first_bsi()
-```
-
-or:
-
-```{r}
-data$MICBLD %>% 
-  filter(OrganismsNo > 0, PatientNo == "103-065") %>% 
-  print() %>% 
-  sel_first_bsi()
-```
-
-The number of pathogen in the first BSI:
-
 ```{r}
 nb_path_bsi1 <- data$MICBLD %>% 
-  arrange(HAIDate) %>% 
-  filter(OrganismsNo > 0) %>%
+  filter(episode < 2) %>% 
   group_by(PatientNo) %>% 
-  group_modify(~ sel_first_bsi(.x) %>% 
-                   select(Iden1, Iden2) %>% 
-                   unlist() %>% 
-                   unique() %>% 
-                   length() %>% 
-                   enframe(name = NULL, value = "nb_path_bsi1"))
-```
-
-#### Computing episodes
-
-The following function replaces `FALSE` surounded by `TRUE` values by `TRUE` in
-a logical vector:
-
-```{r}
-fill_gaps <- function(x) {
-  as.integer(x) %>% # because easier to deal with 1-character encoding
-    paste(collapse = "") %>% 
-    gsub("101", "111", .)
-}
-```
-
-Let's try it:
-
-```{r}
-fill_gaps(c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE))
-```
-
-The following function replaces `111000111100110011` by `111000222200330044`
-
-```{r}
-episodes <- function(x) {
-  x %<>% 
-    strsplit("") %>% 
-    unlist() %>% 
-    as.integer() %>% 
-    rle()
-  sel <- which(x$values > 0)
-  x$values[sel] <- seq_along(sel)
-  inverse.rle(x)
-}
-```
-
-Let's try it:
-
-```{r}
-episodes("111000111100110011")
-```
-
-In order to be able to add the `episode` variable to `data$MICBLD` we need to
-define the following function that computes the `episode` variable **for a given
-patient** using the `fill_gaps()` and `episodes()` accessory functions that we
-defined above. This episode variable tells, **for a given patient**, whether the
-episode is the first one, the second one, etc...
-
-```{r}
-compute_episode <- function(x) {
-  require(magrittr)
-  x %$% 
-    full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1)), # expanding the dates
-              data.frame(HAIDate = sort(unique(HAIDate)), A = TRUE), "HAIDate") %>%
-    assign("tmp1", ., 1) %>% 
-    mutate(A = tidyr::replace_na(A, FALSE)) %>% 
-    pull(A) %>% 
-    fill_gaps() %>% # episodes are considered as separate if there is more than 1 day between them
-    episodes() %>% # give the ID of the episode
-    cbind(tmp1, episode = .) %>%
-    left_join(x, ., "HAIDate") %>% 
-    select(id, episode)
-}
-```
-
-Let's try it:
-
-```{r}
-data$MICBLD %>% 
-  filter(PatientNo == "003-510") %>% 
-  select(PatientNo, HAIDate) %>% 
-  mutate(id = 13:14) %>% 
-  print() %>%
-  compute_episode()
-```
-
-Adding the episodes:
-
-```{r}
-data$MICBLD %<>% 
-  mutate(id = dplyr::row_number()) %>% # necessary for the left_join below
-  assign("tmp2", ., 1) %>% # to save before the filter for subsequent merging
-  filter(OrganismsNo > 0) %>% # First condition: MICBLD.OrganismsNo ≥ 1
-  select(id, PatientNo, HAIDate) %>% 
-  group_by(PatientNo) %>% # The computation of the episodes is by patient
-  group_modify(~ compute_episode(.x)) %>% # Second condition: episodes separated by more than 2 days
-  ungroup() %>% 
-  select(-PatientNo) %>% 
-  left_join(tmp2, ., "id") %>% 
-  select(-id)
-```
-
-#### Etiology
-
-Pathogens per episode:
-
-```{r}
-etiology <- data$MICBLD %>%
-  mutate(id = dplyr::row_number()) %>% # necessary for the left_join below
-  assign("tmp2", ., 1) %>% # to save before the filter for subsequent merging
-  group_by(PatientNo, episode) %>% 
-  group_modify(~ select(.x, Iden1, Iden2) %>% 
-                   unlist() %>% 
-                   unique() %>% 
-                   na.exclude() %>% 
-                   sort() %>% 
-                   paste(collapse = ", ") %>% 
-                   as_tibble()) %>% 
-  ungroup() %>% 
-  filter(! is.na(episode))
+  summarise(nb_path_bsi1 = length(first(strsplit(paste(unlist(pathogens), collapse = ", "), ", "))))
 ```
 
 ### Daily monitoring variables (DAILY1n2)
@@ -1026,11 +906,15 @@ list(data2 %>%
 
 ## 4. Derivation of Frequency of BSI aetiology
 
+All the episodes of BSI:
+
 ```{r}
 tmp <- etiology %>% 
   group_by(value) %>% 
   tally()
 ```
+
+Let's see the frequencies of those which appear in more than one episode:
 
 ```{r}
 tmp %>%
@@ -1038,11 +922,15 @@ tmp %>%
   arrange(desc(n))
 ```
 
+Those which appear only once:
+
 ```{r}
 tmp %>% 
   filter(n < 2) %>% 
   pull(value)
 ```
+
+Let's now do the same but for individual pathogens instead of combinations:
 
 ```{r}
 tmp <- etiology %>%
@@ -1062,6 +950,56 @@ tmp %>%
   filter(n < 2) %>% 
   pull(value)
 ```
+
+And now only for first episodes:
+
+All the episodes:
+
+```{r}
+tmp <- etiology %>% 
+  filter(episode < 2) %>% 
+  group_by(value) %>% 
+  tally()
+```
+
+Let's see the frequencies of those which appear in more than one episode:
+
+```{r}
+tmp %>%
+  filter(n > 1) %>% 
+  arrange(desc(n))
+```
+
+Those which appear only once:
+
+```{r}
+tmp %>% 
+  filter(n < 2) %>% 
+  pull(value)
+```
+
+Let's now do the same but for individual pathogens instead of combinations:
+
+```{r}
+tmp <- etiology %>%
+  filter(episode < 2) %>% 
+  separate_rows(value, sep = ", ") %>% 
+  group_by(value) %>% 
+  tally()
+```
+
+```{r}
+tmp %>%
+  filter(n > 1) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+tmp %>% 
+  filter(n < 2) %>% 
+  pull(value)
+```
+
 
 ## 5. Derivation of BSI incidence rate
 
