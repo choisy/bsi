@@ -906,12 +906,37 @@ list(data2 %>%
 
 ## 4. Derivation of Frequency of BSI aetiology
 
+### All BSI episodes
+
+Total number of episodes:
+
 ```{r}
-nb_path_bsi1 <- data$MICBLD %>% 
+(nb_episodes <- data$MICBLD %>% 
+  filter(episode > 0) %>% 
   group_by(PatientNo, episode) %>% 
-  summarise(a = first(strsplit(paste(unlist(pathogens), collapse = ", "), ", ")))
+  nrow())
 ```
 
+Frequencies of pathogens for all the BSI episodes:
+
+```{r}
+(path_freq <- data$MICBLD %>% 
+  filter(episode > 0) %>% 
+  group_by(PatientNo, episode) %>% 
+  summarise(path = paste(unlist(pathogens), collapse = ", ")) %>% 
+  ungroup() %>% 
+  pull(path) %>% 
+  strsplit(", ") %>%
+  unlist() %>% 
+  table() %>% 
+  sort(TRUE))
+```
+
+As proportions:
+
+```{r}
+path_freq / nb_episodes
+```
 
 
 
