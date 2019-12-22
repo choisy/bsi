@@ -938,6 +938,34 @@ As proportions:
 path_freq / nb_episodes
 ```
 
+### First BSI episodes
+
+Total number of first BSI episodes:
+
+```{r}
+(nb_1st_episodes <- data$MICBLD %>% 
+  filter(episode < 2) %>% 
+  nrow())
+```
+
+Frequencies of pathogens for all the first BSI episodes:
+
+```{r}
+(path_freq_1step <- data$MICBLD %>% 
+  filter(episode < 2) %>% 
+  pull(pathogens) %>% 
+  strsplit(", ") %>%
+  unlist() %>% 
+  table() %>% 
+  sort(TRUE))
+```
+
+As proportions:
+
+```{r}
+path_freq_1step / nb_1st_episodes
+```
+
 
 
 
