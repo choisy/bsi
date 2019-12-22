@@ -1044,7 +1044,7 @@ habsi_rate <- function(x) {
     summarise_all(sum) %>% 
     unlist() %>% 
     as.list() %>%
-    do.call(divide_by, .) %>% 
+    reduce(divide_by) %>% 
     multiply_by(1000)
 }
 ```
@@ -1054,6 +1054,30 @@ Let's try it:
 ```{r}
 habsi_rate(data2)
 ```
+
+### Proportion of patients with HABSI
+
+```{r}
+habsi_prop <- function(x) {
+  x %>% 
+    select(habsi) %>% 
+    drop_na() %>% 
+    group_by(habsi) %>% # habsi is boolean
+    tally() %>% 
+    pull(n) %>% 
+    rev() %>% 
+    as.list() %>% 
+    reduce(divide_by) %>% 
+    multiply_by(100)
+}
+```
+
+Let's try it:
+
+```{r}
+habsi_prop(data2)
+```
+
 
 ## 6. Risk factors associated with BSI
 
