@@ -317,7 +317,7 @@ Number of pathogens in the first episode of BSI:
 nb_path_bsi1 <- data$MICBLD %>% 
   filter(episode < 2) %>% 
   group_by(PatientNo) %>% 
-  summarise(nb_path_bsi1 = length(first(strsplit(paste(unlist(pathogens), collapse = ", "), ", "))))
+  summarise(nb_path_bsi1 = length(unique(first(strsplit(paste(unlist(pathogens), collapse = ", "), ", ")))))
 ```
 
 ### Daily monitoring variables (DAILY1n2)
@@ -905,6 +905,16 @@ list(data2 %>%
 ```
 
 ## 4. Derivation of Frequency of BSI aetiology
+
+```{r}
+nb_path_bsi1 <- data$MICBLD %>% 
+  group_by(PatientNo, episode) %>% 
+  summarise(a = first(strsplit(paste(unlist(pathogens), collapse = ", "), ", ")))
+```
+
+
+
+
 
 All the episodes of BSI:
 
