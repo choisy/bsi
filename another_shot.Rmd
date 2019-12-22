@@ -994,6 +994,35 @@ As proportions:
 path_freq_1stCLBSI / nb_clbsi
 ```
 
+### ALBSI (first) episodes
+
+Reminder: patients are classified CLBSI or ALBSI based on their first BSI
+episode. Here we consider only the first episodes of CLBSI patients. First, the
+total number of ALBSI patients (and hence ALBSI first episodes):
+
+```{r}
+(nb_albsi <- nrow(albsi))
+```
+
+Frequencies of pathogens for all the first CLBSI episodes:
+
+```{r}
+(path_freq_1stALBSI <- data$MICBLD %>% 
+  filter(PatientNo %in% albsi$PatientNo, episode < 2) %>% 
+  pull(pathogens) %>% 
+  strsplit(", ") %>%
+  unlist() %>% 
+  table() %>% 
+  sort(TRUE))
+```
+
+As proportions:
+
+```{r}
+path_freq_1stALBSI / nb_albsi
+```
+
+
 
 
 
