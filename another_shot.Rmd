@@ -775,24 +775,6 @@ day_per_patient <- function(g, v, data) {
     `[<-`(c("day/patient", rep("", 6)), c(3, 5, 7), .) %>% 
     `[<-`(c(2, 4, 6), group_by(data, {{ g }}) %>%
                         tally() %>%
-                        unlist() %>%
-                        rev() %>%
-                        c(nrow(data)))
-}
-```
-
-```{r}
-day_per_patient <- function(g, v, data) {
-  data %>% 
-    group_by({{ g }}) %>% 
-    summarise(a = mean_ci({{ v }})) %>%
-    pivot_wider(names_from = 1, values_from = a) %>% 
-    unlist() %>% 
-    rev(.) %>% 
-    c(mean_ci(unlist(select(data, {{ v }})))) %>% 
-    `[<-`(c("day/patient", rep("", 6)), c(3, 5, 7), .) %>% 
-    `[<-`(c(2, 4, 6), group_by(data, {{ g }}) %>%
-                        tally() %>%
                         pull() %>%
                         rev() %>% 
                         c(nrow(data)))
@@ -1050,108 +1032,28 @@ As proportions:
 path_freq_nonCLBSI / nb_non_clbsi
 ```
 
-
-
-
-
-
-
-All the episodes of BSI:
-
-```{r}
-tmp <- etiology %>% 
-  group_by(value) %>% 
-  tally()
-```
-
-Let's see the frequencies of those which appear in more than one episode:
-
-```{r}
-tmp %>%
-  filter(n > 1) %>% 
-  arrange(desc(n))
-```
-
-Those which appear only once:
-
-```{r}
-tmp %>% 
-  filter(n < 2) %>% 
-  pull(value)
-```
-
-Let's now do the same but for individual pathogens instead of combinations:
-
-```{r}
-tmp <- etiology %>%
-  separate_rows(value, sep = ", ") %>% 
-  group_by(value) %>% 
-  tally()
-```
-
-```{r}
-tmp %>%
-  filter(n > 1) %>% 
-  arrange(desc(n))
-```
-
-```{r}
-tmp %>% 
-  filter(n < 2) %>% 
-  pull(value)
-```
-
-And now only for first episodes:
-
-All the episodes:
-
-```{r}
-tmp <- etiology %>% 
-  filter(episode < 2) %>% 
-  group_by(value) %>% 
-  tally()
-```
-
-Let's see the frequencies of those which appear in more than one episode:
-
-```{r}
-tmp %>%
-  filter(n > 1) %>% 
-  arrange(desc(n))
-```
-
-Those which appear only once:
-
-```{r}
-tmp %>% 
-  filter(n < 2) %>% 
-  pull(value)
-```
-
-Let's now do the same but for individual pathogens instead of combinations:
-
-```{r}
-tmp <- etiology %>%
-  filter(episode < 2) %>% 
-  separate_rows(value, sep = ", ") %>% 
-  group_by(value) %>% 
-  tally()
-```
-
-```{r}
-tmp %>%
-  filter(n > 1) %>% 
-  arrange(desc(n))
-```
-
-```{r}
-tmp %>% 
-  filter(n < 2) %>% 
-  pull(value)
-```
-
-
 ## 5. Derivation of BSI incidence rate
+
+### HABSI rate
+
+```{r}
+habsi_rate <- function(x) {
+  x %>% 
+    select(habsi, rand2icu) %>% 
+    drop_na() %>% 
+    summarise_all(sum) %>% 
+    unlist() %>% 
+    as.list() %>%
+    do.call(divide_by, .) %>% 
+    multiply_by(1000)
+}
+```
+
+Let's try it:
+
+```{r}
+habsi_rate(data2)
+```
 
 ## 6. Risk factors associated with BSI
 
