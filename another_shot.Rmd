@@ -1022,6 +1022,35 @@ As proportions:
 path_freq_1stALBSI / nb_albsi
 ```
 
+### non-CLBSI (first) episodes
+
+Total number of non-CLBSI patients:
+
+```{r}
+(nb_non_clbsi <- data$MICBLD %>% 
+  filter(! PatientNo %in% clbsi$PatientNo, episode < 2) %>% 
+  nrow())
+```
+
+Frequencies of pathogens for all the non-CLBSI episodes:
+
+```{r}
+(path_freq_nonCLBSI <- data$MICBLD %>% 
+  filter(! PatientNo %in% clbsi$PatientNo, episode < 2) %>% 
+  pull(pathogens) %>% 
+  strsplit(", ") %>%
+  unlist() %>% 
+  table() %>% 
+  sort(TRUE))
+```
+
+As proportions:
+
+```{r}
+path_freq_nonCLBSI / nb_non_clbsi
+```
+
+
 
 
 
