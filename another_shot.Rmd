@@ -1234,6 +1234,22 @@ lapply(1:7, function(x) c(out[x], inter[x])) %>%
 
 ## 6. Risk factors associated with BSI
 
+```{r}
+OR_uni <- function(x, digits = 3) {
+  m <- glm(data2$habsi ~ data2[[x]], binomial)
+  exp(c(coef(m)[2], confint(m)[2, ])) %>% 
+    round(digits) %>% 
+    put_in_shape()
+}
+```
+
+Let's try it:
+
+```{r}
+OR_uni("Sex")
+```
+
+
 ## 7. Risk factors associated with mortality
 
 ## 8. Kaplan–Meier analysis
