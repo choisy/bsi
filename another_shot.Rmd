@@ -1078,6 +1078,26 @@ Let's try it:
 habsi_prop(data2)
 ```
 
+### Central line utilization ratio
+
+```{r}
+cl_utilization_ratio <- function(x) {
+  x %>% 
+    select(CLBSI, nb_cl_days) %>% 
+    drop_na() %>% 
+    summarise_all(sum) %>% 
+    unlist() %>% 
+    as.list() %>% 
+    reduce(divide_by) %>% 
+    multiply_by(1000)
+}
+```
+
+Let's try it:
+
+```{r}
+cl_utilization_ratio(data2)
+```
 
 ## 6. Risk factors associated with BSI
 
