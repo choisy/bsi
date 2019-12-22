@@ -369,6 +369,7 @@ summary {
 <ul>
 <li><a href="#packages">0. Packages</a></li>
 <li><a href="#putting-the-data-in-shape">1. Putting the data in shape</a><ul>
+<li><a href="#accessory-functions">Accessory functions</a></li>
 <li><a href="#reading-data">Reading data</a></li>
 <li><a href="#microbiology-variables-micbld">Microbiology variables (MICBLD)</a></li>
 <li><a href="#daily-monitoring-variables-daily1n2">Daily monitoring variables (DAILY1n2)</a></li>
@@ -382,9 +383,27 @@ summary {
 </ul></li>
 <li><a href="#derivation-of-table-1-on-demographics">2. Derivation of Table 1 on demographics</a></li>
 <li><a href="#derivation-of-aetiology-of-bsi">3. Derivation of Aetiology of BSI</a></li>
-<li><a href="#derivation-of-frequency-of-bsi-aetiology">4. Derivation of Frequency of BSI aetiology</a></li>
-<li><a href="#derivation-of-bsi-incidence-rate">5. Derivation of BSI incidence rate</a></li>
-<li><a href="#risk-factors-associated-with-bsi">6. Risk factors associated with BSI</a></li>
+<li><a href="#derivation-of-frequency-of-bsi-aetiology">4. Derivation of Frequency of BSI aetiology</a><ul>
+<li><a href="#all-bsi-episodes">All BSI episodes</a></li>
+<li><a href="#first-bsi-episodes">First BSI episodes</a></li>
+<li><a href="#clbsi-first-episodes">CLBSI (first) episodes</a></li>
+<li><a href="#albsi-first-episodes">ALBSI (first) episodes</a></li>
+<li><a href="#non-clbsi-first-episodes">non-CLBSI (first) episodes</a></li>
+</ul></li>
+<li><a href="#derivation-of-bsi-incidence-rate">5. Derivation of BSI incidence rate</a><ul>
+<li><a href="#habsi-rate">HABSI rate</a></li>
+<li><a href="#proportion-of-patients-with-habsi">Proportion of patients with HABSI</a></li>
+<li><a href="#number-of-central-line-days">Number of central line days</a></li>
+<li><a href="#central-line-utilization-ratio">Central line utilization ratio</a></li>
+<li><a href="#clbsi-rate">CLBSI rate</a></li>
+</ul></li>
+<li><a href="#a.-risk-factors-associated-with-bsi-logistic-regression">6A. Risk factors associated with BSI (logistic regression)</a><ul>
+<li><a href="#numbers-of-bsi-and-non-bsi">Numbers of BSI and non-BSI</a></li>
+<li><a href="#univariate-analyses">Univariate analyses</a></li>
+<li><a href="#multivariate-analyses">Multivariate analyses</a></li>
+<li><a href="#putting-together-1">Putting together</a></li>
+</ul></li>
+<li><a href="#b.-risk-factors-associated-with-bsi-cox-regression">6B. Risk factors associated with BSI (Cox regression)</a></li>
 <li><a href="#risk-factors-associated-with-mortality">7. Risk factors associated with mortality</a></li>
 <li><a href="#kaplanmeier-analysis">8. Kaplan–Meier analysis</a></li>
 </ul>
@@ -425,27 +444,35 @@ library(lubridate)
 library(tibble)
 library(stringr)
 library(C306)
+library(survival)
 #library(huxtable)</code></pre>
 </div>
 <div id="putting-the-data-in-shape" class="section level2">
 <h2>1. Putting the data in shape</h2>
+<div id="accessory-functions" class="section level3">
+<h3>Accessory functions</h3>
+<pre class="r"><code>yesno2bool &lt;- function(x) {
+  na_if(x, &quot;NA&quot;) == &quot;Yes&quot;
+}</code></pre>
+</div>
 <div id="reading-data" class="section level3">
 <h3>Reading data</h3>
-<p>Non-eligible patients:</p>
-<pre class="r"><code>non_eligible_IDs &lt;- c(&quot;020-007&quot;, &quot;020-012&quot;, &quot;020-063&quot;, &quot;003-089&quot;, &quot;003-053&quot;, &quot;003-110&quot;)</code></pre>
 <p>The data are in this file:</p>
 <pre class="r"><code>data_file &lt;- &quot;19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
 <p>The list of sheets that we are interested in:</p>
 <pre class="r"><code>sheets &lt;- c(&quot;ADM&quot;, &quot;AIR&quot;, &quot;APAC&quot;, &quot;DAILY1n2&quot;, &quot;ENR&quot;, &quot;FINISH&quot;, &quot;FU&quot;, &quot;FU_DAY90&quot;, &quot;MICBLD&quot;)</code></pre>
+<p>Non-eligible patients:</p>
+<pre class="r"><code>non_eligible_IDs &lt;- c(&quot;020-007&quot;, &quot;020-012&quot;, &quot;020-063&quot;, &quot;003-089&quot;, &quot;003-053&quot;, &quot;003-110&quot;)</code></pre>
 <p>Reading all the sheets of this file and transforming the dates:</p>
 <pre class="r"><code>data &lt;- sheets %&gt;%
   lapply(readxl::read_excel, path = data_file) %&gt;% 
   lapply(function(x) dplyr::mutate_if(x, function(y) &quot;POSIXct&quot; %in% class(y), as.Date)) %&gt;% 
   setNames(sheets)</code></pre>
 <pre class="r"><code>data$FINISH %&lt;&gt;% 
-  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %&gt;% #, CompleteDate) %&gt;% 
-  mutate(IsAgree = IsAgree == &quot;Yes&quot;) %&gt;% 
-  rename(ICUDateFINISH = ICUDate)</code></pre>
+  select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %&gt;%
+  mutate_at(&quot;IsAgree&quot;, yesno2bool) %&gt;% 
+  rename(ICUDateFINISH = ICUDate) %&gt;% 
+  distinct()</code></pre>
 <p><code>IsComplete == 1</code>: completed until discharge or death</p>
 <p><code>IsAgree == &quot;Yes&quot;</code>: agree to use data for those who didn’t complete.</p>
 <p><code>HosDate</code>: date of discharge</p>
@@ -456,12 +483,12 @@ library(C306)
   select(PatientNo, HospitalDate, NKQ, Tetanus, Pneumonia, Sepsis, Septic, CNS,
          COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
          Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
-         Emergency, Source, Mild, Seve, ICUDate) %&gt;% #, Date1stIntu, Time1stIntu) %&gt;% 
-  mutate_at(c(&quot;Myo&quot;, &quot;DiaCo&quot;, &quot;DiaDa&quot;, &quot;Mode&quot;, &quot;CongI_III&quot;, &quot;Peri&quot;, &quot;Cere&quot;,
-              &quot;Deme&quot;, &quot;Chro&quot;, &quot;Conn&quot;, &quot;Peptic&quot;, &quot;Hemi&quot;, &quot;ModeSeve&quot;, &quot;Meta&quot;,
-              &quot;AIDS&quot;, &quot;AnyMa&quot;, &quot;CongIV&quot;, &quot;Elective&quot;, &quot;Emergency&quot;, &quot;Mild&quot;, &quot;Seve&quot;),
-            function(x) dplyr::na_if(x, &quot;NA&quot;) == &quot;Yes&quot;) %&gt;% 
-  rename(ICUDateADM = ICUDate)</code></pre>
+         Emergency, Source, Mild, Seve, ICUDate) %&gt;%
+  mutate_at(vars(Myo, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme, Chro, Conn,
+                 Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
+                 Emergency, Mild, Seve), yesno2bool) %&gt;% 
+  rename(ICUDateADM = ICUDate) %&gt;% 
+  distinct()</code></pre>
 <p>The following function corrects the names of the bacteria:</p>
 <pre class="r"><code>correct_names &lt;- function(x) {
   x %&gt;% 
@@ -482,8 +509,8 @@ library(C306)
 <p>Blood microbiology:</p>
 <pre class="r"><code>data$MICBLD %&lt;&gt;% 
   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2,
-         IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2, IsOxac3,
-         IsESBL3, IsColistin3) %&gt;% 
+         IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2) %&gt;% 
+  mutate_at(vars(IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2), yesno2bool) %&gt;% 
   mutate_at(vars(OtherIden1, OtherIden2), correct_names) %&gt;% 
   mutate_at(vars(Iden1, Iden2), recode, `1` = &quot;Pseudomonas aeruginosa&quot;,
                                         `2` = &quot;Klebsiella pneumoniae&quot;,
@@ -492,31 +519,74 @@ library(C306)
                                         `5` = &quot;Escherichia coli&quot;,
                                         `6` = &quot;otherpath&quot;) %&gt;% 
   mutate(Iden1 = ifelse(Iden1 == &quot;otherpath&quot;, OtherIden1, Iden1),
-         Iden2 = ifelse(Iden2 == &quot;otherpath&quot;, OtherIden2, Iden2))</code></pre>
+         Iden2 = ifelse(Iden2 == &quot;otherpath&quot;, OtherIden2, Iden2),
+         condition = Iden1 &lt; Iden2,
+         Iden1b = ifelse(condition, Iden1, Iden2),
+         Iden2b = ifelse(condition, Iden2, Iden1)) %&gt;% 
+  unite(&quot;pathogens&quot;, Iden1b, Iden2b, sep = &quot;, &quot;) %&gt;% 
+  mutate(pathogens = ifelse(pathogens == &quot;NA, NA&quot;, Iden1, pathogens)) %&gt;% 
+  select(-OtherIden1, -OtherIden2, -condition) %&gt;% 
+  distinct()</code></pre>
 <p><code>HAIDate</code>: date of sampling</p>
 <p>Daily monitoring:</p>
 <pre class="r"><code>data$DAILY1n2 %&lt;&gt;% 
   select(PatientNo, CVCCount, VSDate, Arterial, TempMax, TempMin) %&gt;% 
-  mutate(Arterial = Arterial == &quot;Yes&quot;)</code></pre>
+  mutate_at(&quot;Arterial&quot;, yesno2bool) %&gt;% 
+  distinct()</code></pre>
 <p><code>CVCCount</code>: number of central venous catheters.</p>
 <p>Patient information:</p>
-<pre class="r"><code>data$ENR %&lt;&gt;% select(PatientNo, Sex, Age, YOB, RandDate, IsTetanus) # do we need IsTetanus??? Why not. Doesn&#39;t harm...</code></pre>
+<pre class="r"><code>data$ENR %&lt;&gt;% select(PatientNo, Sex, Age, YOB, RandDate) %&gt;% 
+  distinct()</code></pre>
 <p>Ventilation:</p>
 <pre class="r"><code>data$AIR %&lt;&gt;% 
   select(PatientNo, IsTrach, TrachDate) %&gt;% 
-  mutate(IsTrach = IsTrach == &quot;Yes&quot;)</code></pre>
+  mutate_at(&quot;IsTrach&quot;, yesno2bool) %&gt;% 
+  distinct()</code></pre>
 <p>Apache code variables:</p>
 <pre class="r"><code>data$APAC %&lt;&gt;% 
   select(PatientNo, HbA1c, Sodium, Potassium, Creatinine, Haematocrit, BloodCell,
          Systolic, Diastolic, PuHightest, PuLowest, ResHightest, ResLowest, FiO2,
-         PaO2, PaCO2, HCO3, ArterialpH, GlasgowScore, Motor, Verbal, Eyes, Total)</code></pre>
+         PaO2, PaCO2, HCO3, ArterialpH, GlasgowScore, Motor, Verbal, Eyes, Total) %&gt;% 
+  distinct()</code></pre>
 <p>Follow-ups:</p>
-<pre class="r"><code>data$FU %&lt;&gt;% select(PatientNo, DeathDate28, Status28, Date28) # We probably don&#39;t need this any more for now</code></pre>
+<pre class="r"><code>data$FU %&lt;&gt;% select(PatientNo, DeathDate28, Status28, Date28) %&gt;% # We probably don&#39;t need this any more for now
+  distinct()</code></pre>
 <p>and:</p>
-<pre class="r"><code>data$FU_DAY90 %&lt;&gt;% select(PatientNo, DeathDate90, Status90, Date90) # We probably don&#39;t need this any more for now</code></pre>
+<pre class="r"><code>data$FU_DAY90 %&lt;&gt;% select(PatientNo, DeathDate90, Status90, Date90) %&gt;% # We probably don&#39;t need this any more for now
+  distinct()</code></pre>
 </div>
 <div id="microbiology-variables-micbld" class="section level3">
 <h3>Microbiology variables (MICBLD)</h3>
+<p>The following function adds the episode variable:</p>
+<pre class="r"><code>add_episode &lt;- function(x) {
+# it&#39;s not clear why the filter() / right_join() doesn&#39;t work here and has to be
+# after the group_modify() call below.
+  x %&gt;% 
+#    filter(OrganismsNo &gt; 0) %&gt;% 
+    add_column(episode = cumsum(c(1, ! (diff(.$HAIDate) &lt; 2 | (diff(.$HAIDate) &lt; 3 &amp; diff(as.integer(as.factor(.$pathogens))) &lt; 1)))))# %&gt;% 
+#    right_join(select(x, PatientNo, HAIDate))
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>data$MICBLD %&gt;% 
+  filter(OrganismsNo &gt; 0) %&gt;% 
+  arrange(HAIDate) %&gt;% 
+  filter(PatientNo == &quot;020-526&quot;) %&gt;% 
+  add_episode()</code></pre>
+<pre><code>## # A tibble: 4 x 13
+##   PatientNo HAIDate    OrganismsNo Iden1                  Iden2                 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 pathogens                                     episode
+##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt;                  &lt;chr&gt;                 &lt;lgl&gt;   &lt;lgl&gt;   &lt;lgl&gt;       &lt;lgl&gt;   &lt;lgl&gt;   &lt;lgl&gt;       &lt;chr&gt;                                           &lt;dbl&gt;
+## 1 020-526   2018-06-25           1 Burkholderia seminalis &lt;NA&gt;                  NA      NA      NA          NA      NA      NA          Burkholderia seminalis                              1
+## 2 020-526   2018-07-02           1 Acinetobacter baumanii &lt;NA&gt;                  NA      NA      NA          NA      NA      NA          Acinetobacter baumanii                              2
+## 3 020-526   2018-07-04           1 Acinetobacter baumanii &lt;NA&gt;                  NA      NA      NA          NA      NA      NA          Acinetobacter baumanii                              2
+## 4 020-526   2018-07-05           2 Acinetobacter baumanii Klebsiella pneumoniae NA      NA      NA          NA      FALSE   NA          Acinetobacter baumanii, Klebsiella pneumoniae       2</code></pre>
+<p>Let’s add it to the whole data set:</p>
+<pre class="r"><code>data$MICBLD %&lt;&gt;% 
+  filter(OrganismsNo &gt; 0) %&gt;% 
+  arrange(HAIDate) %&gt;% 
+  group_by(PatientNo) %&gt;% 
+  group_modify(~ add_episode(.x)) %&gt;% 
+  ungroup() %&gt;% 
+  right_join(select(data$MICBLD, PatientNo, HAIDate), c(&quot;PatientNo&quot;, &quot;HAIDate&quot;))</code></pre>
 <p>Patients with BSI, showing the date of the first BSI episode:</p>
 <pre class="r"><code>first_bsi &lt;- data$MICBLD %&gt;% 
   filter(OrganismsNo &gt; 0) %&gt;% 
@@ -526,198 +596,13 @@ library(C306)
 <p>Numbers of BSI episodes:</p>
 <pre class="r"><code>nb_bsi &lt;- data$MICBLD %&gt;% 
   filter(OrganismsNo &gt; 0) %&gt;% 
-  arrange(HAIDate) %&gt;% 
   group_by(PatientNo) %&gt;% 
-  summarise(nb_bsi = 1 + sum(diff(HAIDate) &gt; 2))</code></pre>
+  summarise(nb_bsi = length(unique(episode)))</code></pre>
 <p>Number of pathogens in the first episode of BSI:</p>
-<p>The following function selects the rows of a patient subset of a <code>MICBLD</code> data frame that correspond to the first episode:</p>
-<pre class="r"><code>sel_first_bsi &lt;- function(x) {
-  sel &lt;- which(diff(x$HAIDate) &gt; 2)
-  if (length(sel) &gt; 0) return(x[seq_len(sel[1]), ])
-  x
-}</code></pre>
-<p>Let’s try it:</p>
-<pre class="r"><code>data$MICBLD %&gt;% 
-  filter(OrganismsNo &gt; 0, PatientNo == &quot;003-510&quot;) %&gt;% 
-  print() %&gt;% 
-  sel_first_bsi()</code></pre>
-<pre><code>## # A tibble: 2 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 003-510   2016-12-15           1 Prot… &lt;NA&gt;  Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 003-510   2016-12-29           1 Prot… &lt;NA&gt;  Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<pre><code>## # A tibble: 1 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 003-510   2016-12-15           1 Prot… &lt;NA&gt;  Proteus m… &lt;NA&gt;       NA      No      No          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<p>or:</p>
-<pre class="r"><code>data$MICBLD %&gt;% 
-  filter(OrganismsNo &gt; 0, PatientNo == &quot;020-103&quot;) %&gt;% 
-  print() %&gt;% 
-  sel_first_bsi()</code></pre>
-<pre><code>## # A tibble: 2 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-103   2018-10-22           1 Serr… &lt;NA&gt;  Serratia … &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 020-103   2018-10-31           1 Kleb… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<pre><code>## # A tibble: 1 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-103   2018-10-22           1 Serr… &lt;NA&gt;  Serratia … &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<p>or:</p>
-<pre class="r"><code>data$MICBLD %&gt;% 
-  filter(OrganismsNo &gt; 0, PatientNo == &quot;020-526&quot;) %&gt;% 
-  print() %&gt;% 
-  sel_first_bsi()</code></pre>
-<pre><code>## # A tibble: 4 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-526   2018-06-25           1 Burk… &lt;NA&gt;  Burkholde… &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 020-526   2018-07-02           1 Acin… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 3 020-526   2018-07-04           1 Acin… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 4 020-526   2018-07-05           2 Acin… Kleb… &lt;NA&gt;       &lt;NA&gt;       NA      NA      NA          NA      No      NA          NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<pre><code>## # A tibble: 1 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 020-526   2018-06-25           1 Burk… &lt;NA&gt;  Burkholde… &lt;NA&gt;       NA      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<p>or:</p>
-<pre class="r"><code>data$MICBLD %&gt;% 
-  filter(OrganismsNo &gt; 0, PatientNo == &quot;103-064&quot;) %&gt;% 
-  print() %&gt;% 
-  sel_first_bsi()</code></pre>
-<pre><code>## # A tibble: 2 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-064   2017-08-04           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 103-064   2017-08-29           1 Esch… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       No      Yes     NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<pre><code>## # A tibble: 1 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-064   2017-08-04           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<p>or:</p>
-<pre class="r"><code>data$MICBLD %&gt;% 
-  filter(OrganismsNo &gt; 0, PatientNo == &quot;103-065&quot;) %&gt;% 
-  print() %&gt;% 
-  sel_first_bsi()</code></pre>
-<pre><code>## # A tibble: 2 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-065   2017-09-21           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       No      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## 2 103-065   2017-10-16           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       Yes     NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<pre><code>## # A tibble: 1 x 16
-##   PatientNo HAIDate    OrganismsNo Iden1 Iden2 OtherIden1 OtherIden2 IsOxac1 IsESBL1 IsColistin1 IsOxac2 IsESBL2 IsColistin2 IsOxac3
-##   &lt;chr&gt;     &lt;date&gt;           &lt;dbl&gt; &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;chr&gt;   &lt;chr&gt;   &lt;chr&gt;       &lt;lgl&gt;  
-## 1 103-065   2017-09-21           1 Stap… &lt;NA&gt;  &lt;NA&gt;       &lt;NA&gt;       No      NA      NA          &lt;NA&gt;    &lt;NA&gt;    &lt;NA&gt;        NA     
-## # … with 2 more variables: IsESBL3 &lt;lgl&gt;, IsColistin3 &lt;lgl&gt;</code></pre>
-<p>The number of pathogen in the first BSI:</p>
 <pre class="r"><code>nb_path_bsi1 &lt;- data$MICBLD %&gt;% 
-  arrange(HAIDate) %&gt;% 
-  filter(OrganismsNo &gt; 0) %&gt;%
+  filter(episode &lt; 2) %&gt;% 
   group_by(PatientNo) %&gt;% 
-  group_modify(~ sel_first_bsi(.x) %&gt;% 
-                   select(Iden1, Iden2) %&gt;% 
-                   unlist() %&gt;% 
-                   unique() %&gt;% 
-                   length() %&gt;% 
-                   enframe(name = NULL, value = &quot;nb_path_bsi1&quot;))</code></pre>
-<div id="computing-episodes" class="section level4">
-<h4>Computing episodes</h4>
-<p>The following function replaces <code>FALSE</code> surounded by <code>TRUE</code> values by <code>TRUE</code> in a logical vector:</p>
-<pre class="r"><code>fill_gaps &lt;- function(x) {
-  as.integer(x) %&gt;% # because easier to deal with 1-character encoding
-    paste(collapse = &quot;&quot;) %&gt;% 
-    gsub(&quot;101&quot;, &quot;111&quot;, .)
-}</code></pre>
-<p>Let’s try it:</p>
-<pre class="r"><code>fill_gaps(c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE))</code></pre>
-<pre><code>## [1] &quot;1111001&quot;</code></pre>
-<p>The following function replaces <code>111000111100110011</code> by <code>111000222200330044</code></p>
-<pre class="r"><code>episodes &lt;- function(x) {
-  x %&lt;&gt;% 
-    strsplit(&quot;&quot;) %&gt;% 
-    unlist() %&gt;% 
-    as.integer() %&gt;% 
-    rle()
-  sel &lt;- which(x$values &gt; 0)
-  x$values[sel] &lt;- seq_along(sel)
-  inverse.rle(x)
-}</code></pre>
-<p>Let’s try it:</p>
-<pre class="r"><code>episodes(&quot;111000111100110011&quot;)</code></pre>
-<pre><code>##  [1] 1 1 1 0 0 0 2 2 2 2 0 0 3 3 0 0 4 4</code></pre>
-<p>In order to be able to add the <code>episode</code> variable to <code>data$MICBLD</code> we need to define the following function that computes the <code>episode</code> variable <strong>for a given patient</strong> using the <code>fill_gaps()</code> and <code>episodes()</code> accessory functions that we defined above. This episode variable tells, <strong>for a given patient</strong>, whether the episode is the first one, the second one, etc…</p>
-<pre class="r"><code>compute_episode &lt;- function(x) {
-  require(magrittr)
-  x %$% 
-    full_join(data.frame(HAIDate = seq(min(HAIDate), max(HAIDate), 1)), # expanding the dates
-              data.frame(HAIDate = sort(unique(HAIDate)), A = TRUE), &quot;HAIDate&quot;) %&gt;%
-    assign(&quot;tmp1&quot;, ., 1) %&gt;% 
-    mutate(A = tidyr::replace_na(A, FALSE)) %&gt;% 
-    pull(A) %&gt;% 
-    fill_gaps() %&gt;% # episodes are considered as separate if there is more than 1 day between them
-    episodes() %&gt;% # give the ID of the episode
-    cbind(tmp1, episode = .) %&gt;%
-    left_join(x, ., &quot;HAIDate&quot;) %&gt;% 
-    select(id, episode)
-}</code></pre>
-<p>Let’s try it:</p>
-<pre class="r"><code>data$MICBLD %&gt;% 
-  filter(PatientNo == &quot;003-510&quot;) %&gt;% 
-  select(PatientNo, HAIDate) %&gt;% 
-  mutate(id = 13:14) %&gt;% 
-  print() %&gt;%
-  compute_episode()</code></pre>
-<pre><code>## # A tibble: 2 x 3
-##   PatientNo HAIDate       id
-##   &lt;chr&gt;     &lt;date&gt;     &lt;int&gt;
-## 1 003-510   2016-12-15    13
-## 2 003-510   2016-12-29    14</code></pre>
-<pre><code>## # A tibble: 2 x 2
-##      id episode
-##   &lt;int&gt;   &lt;int&gt;
-## 1    13       1
-## 2    14       2</code></pre>
-<p>Adding the episodes:</p>
-<pre class="r"><code>data$MICBLD %&lt;&gt;% 
-  mutate(id = dplyr::row_number()) %&gt;% # necessary for the left_join below
-  assign(&quot;tmp2&quot;, ., 1) %&gt;% # to save before the filter for subsequent merging
-  filter(OrganismsNo &gt; 0) %&gt;% # First condition: MICBLD.OrganismsNo ≥ 1
-  select(id, PatientNo, HAIDate) %&gt;% 
-  group_by(PatientNo) %&gt;% # The computation of the episodes is by patient
-  group_modify(~ compute_episode(.x)) %&gt;% # Second condition: episodes separated by more than 2 days
-  ungroup() %&gt;% 
-  select(-PatientNo) %&gt;% 
-  left_join(tmp2, ., &quot;id&quot;) %&gt;% 
-  select(-id)</code></pre>
-</div>
-<div id="etiology" class="section level4">
-<h4>Etiology</h4>
-<p>Pathogens per episode:</p>
-<pre class="r"><code>etiology &lt;- data$MICBLD %&gt;%
-  mutate(id = dplyr::row_number()) %&gt;% # necessary for the left_join below
-  assign(&quot;tmp2&quot;, ., 1) %&gt;% # to save before the filter for subsequent merging
-  group_by(PatientNo, episode) %&gt;% 
-  group_modify(~ select(.x, Iden1, Iden2) %&gt;% 
-                   unlist() %&gt;% 
-                   unique() %&gt;% 
-                   na.exclude() %&gt;% 
-                   sort() %&gt;% 
-                   paste(collapse = &quot;, &quot;) %&gt;% 
-                   as_tibble()) %&gt;% 
-  ungroup() %&gt;% 
-  filter(! is.na(episode))</code></pre>
-<pre><code>## Warning: Calling `as_tibble()` on a vector is discouraged, because the behavior is likely to change in the future. Use `tibble::enframe(name = NULL)` instead.
-## This warning is displayed once per session.</code></pre>
-</div>
+  summarise(nb_path_bsi1 = length(unique(first(strsplit(paste(unlist(pathogens), collapse = &quot;, &quot;), &quot;, &quot;)))))</code></pre>
 </div>
 <div id="daily-monitoring-variables-daily1n2" class="section level3">
 <h3>Daily monitoring variables (DAILY1n2)</h3>
@@ -801,6 +686,8 @@ library(C306)
          adm2icu      = ICUDateFINISH - HospitalDate,
          adm2hos      = HosDate - HospitalDate,
          ICUstay      = ICUDateFINISH - ICUDateADM,
+# time of BSI potential event:
+         time2bsi     = ifelse(is.na(first_BSI), ICUDateFINISH, first_BSI) - as.numeric(RandDate),
 # death at hospital discharge:
 #         deathHOSdis  = OutCome &lt; 3,
 # death at ICU discharge:
@@ -828,7 +715,7 @@ library(C306)
   mutate_at(vars(Meta, AIDS), function(x) 6 * x) %&gt;% 
   mutate(Mode         = 3 * Mode) %&gt;% 
   mutate(charlson     = select_if(., is.numeric) %&gt;% rowSums(),
-         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %&gt;% as.character())</code></pre>
+         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %&gt;% as.character()) # not sure whether this should be here or later (depends on how many time it&#39;s used)</code></pre>
 <p>Let’s compare with Thinh:</p>
 <pre class="r"><code>charlson_trinh &lt;- readRDS(&quot;charlson_score.rds&quot;)
 
@@ -909,9 +796,8 @@ any(! unlist(map2(marc, trinh, identical)))</code></pre>
                        names(apache_physio))</code></pre>
 <p>Let’s see an example:</p>
 <pre class="r"><code>head(score_fcts$temp(data$DAILY1n2$TempMax), 100)</code></pre>
-<pre><code>##   [1]  3  1  0  0  0  0  0  0  0  3  1  3  1  0  0  1  3  3  3  3  4  0  0  0  0  0  0  0  3  3  1  3  0  0  0  0  0  0  1  0  0  0  0  1
-##  [45]  0  0  1  4  1  3  3  0  0  0  3  0  0  0  0  0  3  0  0  3  3  1  1  1  3  1  1  3  3  3  0  0  3  3  3  3  0  0  1  1  1  0 NA  3
-##  [89]  3  1  1  1  0  0  0  0  0  0  0  0</code></pre>
+<pre><code>##   [1]  3  1  0  0  0  0  0  0  0  3  1  3  1  0  0  1  3  3  3  3  4  0  0  0  0  0  0  0  3  3  1  3  0  0  0  0  0  0  1  0  0  0  0  1  0  0  1  4  1  3  3  0  0  0  3  0  0  0  0  0  3  0  0  3  3  1  1  1  3  1  1  3  3  3  0  0  3  3  3  3  0  0
+##  [83]  1  1  1  0 NA  3  3  1  1  1  0  0  0  0  0  0  0  0</code></pre>
 <p>Computing and adding the apache scores to <code>data2</code>:</p>
 <pre class="r"><code>apache &lt;- data$APAC %&gt;% 
   left_join(select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency), &quot;PatientNo&quot;) %&gt;% 
@@ -987,22 +873,21 @@ trinh[] &lt;- lapply(trinh, function(x) {x[which(is.infinite(x))] &lt;- 0; x})
 
 #any(! unlist(map2(marc, trinh, identical)))
 unlist(map2(marc, trinh, identical))</code></pre>
-<pre><code>##       temp_score        map_score         hr_score         rr_score         na_score          k_score creatinine_score hematocrit_score 
-##            FALSE             TRUE             TRUE             TRUE             TRUE             TRUE             TRUE             TRUE 
-##        wbc_score        gcs_score        age_score          c_score 
-##             TRUE            FALSE            FALSE            FALSE</code></pre>
+<pre><code>##       temp_score        map_score         hr_score         rr_score         na_score          k_score creatinine_score hematocrit_score        wbc_score        gcs_score        age_score          c_score 
+##            FALSE             TRUE             TRUE             TRUE             TRUE             TRUE             TRUE             TRUE             TRUE            FALSE            FALSE            FALSE</code></pre>
 <pre class="r"><code>data2 %&lt;&gt;% left_join(select(apache_trinh, PatientNo, total_score) %&gt;% rename(apache = total_score), &quot;PatientNo&quot;)</code></pre>
 </div>
 <div id="adding-mortalities-from-trinh" class="section level3">
 <h3>Adding mortalities from Trinh</h3>
 <pre class="r"><code>data2 &lt;- readRDS(&quot;death_day.full.rds&quot;) %&gt;% 
   mutate(death28 = Event &gt; 0  &amp; DOD &lt; 29,
-         death90 = Event &gt; 0  &amp; DOD &lt; 91) %&gt;% 
-  select(PatientNo, death28, death90) %&gt;% 
+         death90 = Event &gt; 0  &amp; DOD &lt; 91) %&gt;%
+  select(PatientNo, death28, death90, DOD) %&gt;% 
   left_join(select(readRDS(&quot;icu_mortality.full.rds&quot;), -IsTetanus), &quot;PatientNo&quot;) %&gt;% 
   rename(deathICU = IsDeath) %&gt;% 
   left_join(data2, ., &quot;PatientNo&quot;) %&gt;% 
   mutate(VARI = as.character(VARI) == &quot;VARI&quot;)</code></pre>
+<p>Note that there are 6 missing values in <code>DOD</code>.</p>
 </div>
 <div id="filtering-the-data-set" class="section level3">
 <h3>Filtering the data set</h3>
@@ -1012,12 +897,12 @@ unlist(map2(marc, trinh, identical))</code></pre>
 <div id="cleaning-the-data-set" class="section level3">
 <h3>Cleaning the data set</h3>
 <pre class="r"><code>data2 %&lt;&gt;% 
-  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, CLBSI_risk,
-         ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
-         CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
-         had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, habsi_risk,
-         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI,
-         nb_bsi, nb_path_bsi1) %&gt;% 
+  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy,
+         CLBSI_risk, ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis,
+         CNS, COPD, CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu,
+         adm2hos, time2bsi, had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi,
+         habsi_risk, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, DOD, death28, death90, deathICU,
+         VARI, nb_bsi, nb_path_bsi1) %&gt;% 
   mutate_if(is.numeric, as.integer)</code></pre>
 <pre><code>## Warning: NAs introduced by coercion to integer range</code></pre>
 </div>
@@ -1079,21 +964,6 @@ mean_ci(data2$nb_cl_days)</code></pre>
     `[&lt;-`(c(&quot;day/patient&quot;, rep(&quot;&quot;, 6)), c(3, 5, 7), .) %&gt;% 
     `[&lt;-`(c(2, 4, 6), group_by(data, {{ g }}) %&gt;%
                         tally() %&gt;%
-                        unlist() %&gt;%
-                        rev() %&gt;%
-                        c(nrow(data)))
-}</code></pre>
-<pre class="r"><code>day_per_patient &lt;- function(g, v, data) {
-  data %&gt;% 
-    group_by({{ g }}) %&gt;% 
-    summarise(a = mean_ci({{ v }})) %&gt;%
-    pivot_wider(names_from = 1, values_from = a) %&gt;% 
-    unlist() %&gt;% 
-    rev(.) %&gt;% 
-    c(mean_ci(unlist(select(data, {{ v }})))) %&gt;% 
-    `[&lt;-`(c(&quot;day/patient&quot;, rep(&quot;&quot;, 6)), c(3, 5, 7), .) %&gt;% 
-    `[&lt;-`(c(2, 4, 6), group_by(data, {{ g }}) %&gt;%
-                        tally() %&gt;%
                         pull() %&gt;%
                         rev() %&gt;% 
                         c(nrow(data)))
@@ -1143,7 +1013,7 @@ mean_ci(data2$nb_cl_days)</code></pre>
 ## 10                 NKQ    44                    547                      591                  
 ## 11         -   - mouth             25/44 (57%)           413/547 (76%)           438/591 (74%)
 ## 12  -   - tracheostomy             19/44 (43%)           134/547 (24%)           153/591 (26%)
-## 13        tracheostomy    36       12/36 (33%)  547      429/547 (78%)   583     441/583 (76%)
+## 13        tracheostomy    35       12/35 (34%)  541      429/541 (79%)   576     441/576 (77%)
 ## 14          CLBSI_risk    44       33/44 (75%)  547      285/547 (52%)   591     318/591 (54%)
 ## 15          ALBSI_risk    44       22/44 (50%)  547      131/547 (24%)   591     153/591 (26%)
 ## 16              apache    44       16 (13, 22)  537        18 (14, 22)   581       17 (13, 22)
@@ -1218,8 +1088,8 @@ mean_ci(data2$nb_cl_days)</code></pre>
 ##   `nb BSI episodes` `all patients` `with HABSI` `with CLBSI`
 ##               &lt;dbl&gt;          &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt;
 ## 1                 0            547            0            0
-## 2                 1             39           39           26
-## 3                 2              5            5            5</code></pre>
+## 2                 1             38           38           25
+## 3                 2              6            6            6</code></pre>
 <p>Number of pathogens in the first episode of BSI:</p>
 <pre class="r"><code>list(data2 %&gt;% 
        group_by(nb_path_bsi1) %&gt;% 
@@ -1240,79 +1110,647 @@ mean_ci(data2$nb_cl_days)</code></pre>
 <pre><code>## # A tibble: 2 x 4
 ##   `nb pathog in 1st BSI` `all patients` `with HABSI` `with CLBSI`
 ##                    &lt;int&gt;          &lt;int&gt;        &lt;int&gt;        &lt;int&gt;
-## 1                      2             43           43           30
-## 2                      4              1            1            1</code></pre>
+## 1                      1             41           41           29
+## 2                      2              3            3            2</code></pre>
 </div>
 <div id="derivation-of-frequency-of-bsi-aetiology" class="section level2">
 <h2>4. Derivation of Frequency of BSI aetiology</h2>
-<pre class="r"><code>tmp &lt;- etiology %&gt;% 
-  group_by(value) %&gt;% 
-  tally()</code></pre>
-<pre class="r"><code>tmp %&gt;%
-  filter(n &gt; 1) %&gt;% 
-  arrange(desc(n))</code></pre>
-<pre><code>## # A tibble: 8 x 2
-##   value                            n
-##   &lt;chr&gt;                        &lt;int&gt;
-## 1 Klebsiella pneumoniae           11
-## 2 Pseudomonas aeruginosa           7
-## 3 Staphylococcus aureus            5
-## 4 Acinetobacter baumanii           3
-## 5 Proteus mirabilis                3
-## 6 Escherichia coli                 2
-## 7 Staphylococcus epidermidis       2
-## 8 Stenotrophomonas maltophilia     2</code></pre>
-<pre class="r"><code>tmp %&gt;% 
-  filter(n &lt; 2) %&gt;% 
-  pull(value)</code></pre>
-<pre><code>##  [1] &quot;Acinetobacter baumanii, Klebsiella pneumoniae&quot;                              
-##  [2] &quot;Acinetobacter baumanii, Klebsiella pneumoniae, Stenotrophomonas maltophilia&quot;
-##  [3] &quot;Acinetobacter baumanii, Pseudomonas aeruginosa&quot;                             
-##  [4] &quot;Burkholderia seminalis&quot;                                                     
-##  [5] &quot;Elizabethkingia meningoseptica&quot;                                             
-##  [6] &quot;Enterococcus faecalis&quot;                                                      
-##  [7] &quot;Enterococcus faecalis, Proteus mirabilis&quot;                                   
-##  [8] &quot;Klebsiella aerogenes, Pseudomonas aeruginosa&quot;                               
-##  [9] &quot;Klebsiella oxytoca&quot;                                                         
-## [10] &quot;Providencia stuartii&quot;                                                       
-## [11] &quot;Serratia marcescens&quot;                                                        
-## [12] &quot;Staphylococcus coagulase&quot;                                                   
-## [13] &quot;Staphylococcus haemolyticus&quot;                                                
-## [14] &quot;Staphylococcus xylosus&quot;</code></pre>
-<pre class="r"><code>tmp &lt;- etiology %&gt;%
-  separate_rows(value, sep = &quot;, &quot;) %&gt;% 
-  group_by(value) %&gt;% 
-  tally()</code></pre>
-<pre class="r"><code>tmp %&gt;%
-  filter(n &gt; 1) %&gt;% 
-  arrange(desc(n))</code></pre>
-<pre><code>## # A tibble: 9 x 2
-##   value                            n
-##   &lt;chr&gt;                        &lt;int&gt;
-## 1 Klebsiella pneumoniae           13
-## 2 Pseudomonas aeruginosa           9
-## 3 Acinetobacter baumanii           6
-## 4 Staphylococcus aureus            5
-## 5 Proteus mirabilis                4
-## 6 Stenotrophomonas maltophilia     3
-## 7 Enterococcus faecalis            2
-## 8 Escherichia coli                 2
-## 9 Staphylococcus epidermidis       2</code></pre>
-<pre class="r"><code>tmp %&gt;% 
-  filter(n &lt; 2) %&gt;% 
-  pull(value)</code></pre>
-<pre><code>## [1] &quot;Burkholderia seminalis&quot;         &quot;Elizabethkingia meningoseptica&quot; &quot;Klebsiella aerogenes&quot;           &quot;Klebsiella oxytoca&quot;            
-## [5] &quot;Providencia stuartii&quot;           &quot;Serratia marcescens&quot;            &quot;Staphylococcus coagulase&quot;       &quot;Staphylococcus haemolyticus&quot;   
-## [9] &quot;Staphylococcus xylosus&quot;</code></pre>
+<div id="all-bsi-episodes" class="section level3">
+<h3>All BSI episodes</h3>
+<p>Total number of episodes:</p>
+<pre class="r"><code>(nb_episodes &lt;- data$MICBLD %&gt;% 
+  filter(episode &gt; 0) %&gt;% 
+  group_by(PatientNo, episode) %&gt;% 
+  nrow())</code></pre>
+<pre><code>## [1] 53</code></pre>
+<p>Frequencies of pathogens for all the BSI episodes:</p>
+<pre class="r"><code>(path_freq &lt;- data$MICBLD %&gt;% 
+  filter(episode &gt; 0) %&gt;% 
+  group_by(PatientNo, episode) %&gt;% 
+  summarise(path = paste(unlist(pathogens), collapse = &quot;, &quot;)) %&gt;% 
+  ungroup() %&gt;% 
+  pull(path) %&gt;% 
+  strsplit(&quot;, &quot;) %&gt;%
+  unlist() %&gt;% 
+  table() %&gt;% 
+  sort(TRUE))</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa         Acinetobacter baumanii          Staphylococcus aureus              Proteus mirabilis   Stenotrophomonas maltophilia          Enterococcus faecalis               Escherichia coli 
+##                             15                              9                              8                              5                              4                              3                              2                              2 
+##     Staphylococcus epidermidis         Burkholderia seminalis Elizabethkingia meningoseptica           Klebsiella aerogenes             Klebsiella oxytoca           Providencia stuartii            Serratia marcescens       Staphylococcus coagulase 
+##                              2                              1                              1                              1                              1                              1                              1                              1 
+##    Staphylococcus haemolyticus         Staphylococcus xylosus 
+##                              1                              1</code></pre>
+<p>As proportions:</p>
+<pre class="r"><code>path_freq / nb_episodes</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa         Acinetobacter baumanii          Staphylococcus aureus              Proteus mirabilis   Stenotrophomonas maltophilia          Enterococcus faecalis               Escherichia coli 
+##                     0.28301887                     0.16981132                     0.15094340                     0.09433962                     0.07547170                     0.05660377                     0.03773585                     0.03773585 
+##     Staphylococcus epidermidis         Burkholderia seminalis Elizabethkingia meningoseptica           Klebsiella aerogenes             Klebsiella oxytoca           Providencia stuartii            Serratia marcescens       Staphylococcus coagulase 
+##                     0.03773585                     0.01886792                     0.01886792                     0.01886792                     0.01886792                     0.01886792                     0.01886792                     0.01886792 
+##    Staphylococcus haemolyticus         Staphylococcus xylosus 
+##                     0.01886792                     0.01886792</code></pre>
+</div>
+<div id="first-bsi-episodes" class="section level3">
+<h3>First BSI episodes</h3>
+<p>Total number of first BSI episodes:</p>
+<pre class="r"><code>(nb_1st_episodes &lt;- data$MICBLD %&gt;% 
+  filter(episode &lt; 2) %&gt;% 
+  nrow())</code></pre>
+<pre><code>## [1] 44</code></pre>
+<p>Frequencies of pathogens for all the first BSI episodes:</p>
+<pre class="r"><code>(path_freq_1step &lt;- data$MICBLD %&gt;% 
+  filter(episode &lt; 2) %&gt;% 
+  pull(pathogens) %&gt;% 
+  strsplit(&quot;, &quot;) %&gt;%
+  unlist() %&gt;% 
+  table() %&gt;% 
+  sort(TRUE))</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa         Acinetobacter baumanii          Staphylococcus aureus              Proteus mirabilis          Enterococcus faecalis     Staphylococcus epidermidis   Stenotrophomonas maltophilia 
+##                             11                              9                              4                              4                              3                              2                              2                              2 
+##         Burkholderia seminalis Elizabethkingia meningoseptica               Escherichia coli           Klebsiella aerogenes             Klebsiella oxytoca           Providencia stuartii            Serratia marcescens       Staphylococcus coagulase 
+##                              1                              1                              1                              1                              1                              1                              1                              1 
+##    Staphylococcus haemolyticus         Staphylococcus xylosus 
+##                              1                              1</code></pre>
+<p>As proportions:</p>
+<pre class="r"><code>path_freq_1step / nb_1st_episodes</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa         Acinetobacter baumanii          Staphylococcus aureus              Proteus mirabilis          Enterococcus faecalis     Staphylococcus epidermidis   Stenotrophomonas maltophilia 
+##                     0.25000000                     0.20454545                     0.09090909                     0.09090909                     0.06818182                     0.04545455                     0.04545455                     0.04545455 
+##         Burkholderia seminalis Elizabethkingia meningoseptica               Escherichia coli           Klebsiella aerogenes             Klebsiella oxytoca           Providencia stuartii            Serratia marcescens       Staphylococcus coagulase 
+##                     0.02272727                     0.02272727                     0.02272727                     0.02272727                     0.02272727                     0.02272727                     0.02272727                     0.02272727 
+##    Staphylococcus haemolyticus         Staphylococcus xylosus 
+##                     0.02272727                     0.02272727</code></pre>
+</div>
+<div id="clbsi-first-episodes" class="section level3">
+<h3>CLBSI (first) episodes</h3>
+<p>Reminder: patients are classified CLBSI or ALBSI based on their first BSI episode. Here we consider only the first episodes of CLBSI patients. First, the total number of CLBSI patients (and hence CLBSI first episodes):</p>
+<pre class="r"><code>(nb_clbsi &lt;- nrow(clbsi))</code></pre>
+<pre><code>## [1] 31</code></pre>
+<p>Frequencies of pathogens for all the first CLBSI episodes:</p>
+<pre class="r"><code>(path_freq_1stCLBSI &lt;- data$MICBLD %&gt;% 
+  filter(PatientNo %in% clbsi$PatientNo, episode &lt; 2) %&gt;% 
+  pull(pathogens) %&gt;% 
+  strsplit(&quot;, &quot;) %&gt;%
+  unlist() %&gt;% 
+  table() %&gt;% 
+  sort(TRUE))</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa         Acinetobacter baumanii              Proteus mirabilis          Staphylococcus aureus         Burkholderia seminalis Elizabethkingia meningoseptica          Enterococcus faecalis 
+##                              9                              7                              3                              3                              3                              1                              1                              1 
+##             Klebsiella oxytoca           Providencia stuartii            Serratia marcescens       Staphylococcus coagulase    Staphylococcus haemolyticus 
+##                              1                              1                              1                              1                              1</code></pre>
+<p>As proportions:</p>
+<pre class="r"><code>path_freq_1stCLBSI / nb_clbsi</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa         Acinetobacter baumanii              Proteus mirabilis          Staphylococcus aureus         Burkholderia seminalis Elizabethkingia meningoseptica          Enterococcus faecalis 
+##                     0.29032258                     0.22580645                     0.09677419                     0.09677419                     0.09677419                     0.03225806                     0.03225806                     0.03225806 
+##             Klebsiella oxytoca           Providencia stuartii            Serratia marcescens       Staphylococcus coagulase    Staphylococcus haemolyticus 
+##                     0.03225806                     0.03225806                     0.03225806                     0.03225806                     0.03225806</code></pre>
+</div>
+<div id="albsi-first-episodes" class="section level3">
+<h3>ALBSI (first) episodes</h3>
+<p>Reminder: patients are classified CLBSI or ALBSI based on their first BSI episode. Here we consider only the first episodes of CLBSI patients. First, the total number of ALBSI patients (and hence ALBSI first episodes):</p>
+<pre class="r"><code>(nb_albsi &lt;- nrow(albsi))</code></pre>
+<pre><code>## [1] 21</code></pre>
+<p>Frequencies of pathogens for all the first CLBSI episodes:</p>
+<pre class="r"><code>(path_freq_1stALBSI &lt;- data$MICBLD %&gt;% 
+  filter(PatientNo %in% albsi$PatientNo, episode &lt; 2) %&gt;% 
+  pull(pathogens) %&gt;% 
+  strsplit(&quot;, &quot;) %&gt;%
+  unlist() %&gt;% 
+  table() %&gt;% 
+  sort(TRUE))</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa          Enterococcus faecalis              Proteus mirabilis   Stenotrophomonas maltophilia         Acinetobacter baumanii         Burkholderia seminalis Elizabethkingia meningoseptica 
+##                              4                              4                              2                              2                              2                              1                              1                              1 
+##           Klebsiella aerogenes           Providencia stuartii          Staphylococcus aureus     Staphylococcus epidermidis    Staphylococcus haemolyticus         Staphylococcus xylosus 
+##                              1                              1                              1                              1                              1                              1</code></pre>
+<p>As proportions:</p>
+<pre class="r"><code>path_freq_1stALBSI / nb_albsi</code></pre>
+<pre><code>## .
+##          Klebsiella pneumoniae         Pseudomonas aeruginosa          Enterococcus faecalis              Proteus mirabilis   Stenotrophomonas maltophilia         Acinetobacter baumanii         Burkholderia seminalis Elizabethkingia meningoseptica 
+##                     0.19047619                     0.19047619                     0.09523810                     0.09523810                     0.09523810                     0.04761905                     0.04761905                     0.04761905 
+##           Klebsiella aerogenes           Providencia stuartii          Staphylococcus aureus     Staphylococcus epidermidis    Staphylococcus haemolyticus         Staphylococcus xylosus 
+##                     0.04761905                     0.04761905                     0.04761905                     0.04761905                     0.04761905                     0.04761905</code></pre>
+</div>
+<div id="non-clbsi-first-episodes" class="section level3">
+<h3>non-CLBSI (first) episodes</h3>
+<p>Total number of non-CLBSI patients:</p>
+<pre class="r"><code>(nb_non_clbsi &lt;- data$MICBLD %&gt;% 
+  filter(! PatientNo %in% clbsi$PatientNo, episode &lt; 2) %&gt;% 
+  nrow())</code></pre>
+<pre><code>## [1] 13</code></pre>
+<p>Frequencies of pathogens for all the non-CLBSI episodes:</p>
+<pre class="r"><code>(path_freq_nonCLBSI &lt;- data$MICBLD %&gt;% 
+  filter(! PatientNo %in% clbsi$PatientNo, episode &lt; 2) %&gt;% 
+  pull(pathogens) %&gt;% 
+  strsplit(&quot;, &quot;) %&gt;%
+  unlist() %&gt;% 
+  table() %&gt;% 
+  sort(TRUE))</code></pre>
+<pre><code>## .
+##        Klebsiella pneumoniae       Pseudomonas aeruginosa   Staphylococcus epidermidis Stenotrophomonas maltophilia       Acinetobacter baumanii        Enterococcus faecalis             Escherichia coli         Klebsiella aerogenes 
+##                            2                            2                            2                            2                            1                            1                            1                            1 
+##        Staphylococcus aureus       Staphylococcus xylosus 
+##                            1                            1</code></pre>
+<p>As proportions:</p>
+<pre class="r"><code>path_freq_nonCLBSI / nb_non_clbsi</code></pre>
+<pre><code>## .
+##        Klebsiella pneumoniae       Pseudomonas aeruginosa   Staphylococcus epidermidis Stenotrophomonas maltophilia       Acinetobacter baumanii        Enterococcus faecalis             Escherichia coli         Klebsiella aerogenes 
+##                   0.15384615                   0.15384615                   0.15384615                   0.15384615                   0.07692308                   0.07692308                   0.07692308                   0.07692308 
+##        Staphylococcus aureus       Staphylococcus xylosus 
+##                   0.07692308                   0.07692308</code></pre>
+</div>
 </div>
 <div id="derivation-of-bsi-incidence-rate" class="section level2">
 <h2>5. Derivation of BSI incidence rate</h2>
+<pre class="r"><code>extract_prop_test &lt;- function(x) {
+  unname(unlist(x[c(&quot;estimate&quot;, &quot;conf.int&quot;)]))
+}</code></pre>
+<pre class="r"><code>put_in_shape &lt;- function(x) {
+  paste0(x[1], &quot; (&quot;, x[2], &quot;, &quot;, x[3], &quot;)&quot;)
+}</code></pre>
+<pre class="r"><code>calc_prop &lt;- function(x, factor, digits) {
+  x %&gt;%
+    as.list() %&gt;% 
+    reduce(prop.test) %&gt;% 
+    extract_prop_test() %&gt;% 
+    multiply_by(factor) %&gt;% 
+    round(digits) %&gt;% 
+    put_in_shape()
+}</code></pre>
+<div id="habsi-rate" class="section level3">
+<h3>HABSI rate</h3>
+<pre class="r"><code>habsi_rate &lt;- function(x, factor = 1000, digits = 3) {
+  x %&gt;% 
+    select(habsi, rand2icu) %&gt;% 
+    drop_na() %&gt;% 
+    summarise_all(sum) %&gt;% 
+    unlist() %&gt;% 
+    calc_prop(factor, digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>habsi_rate(data2)</code></pre>
+<pre><code>## [1] &quot;3.765 (2.769, 5.099)&quot;</code></pre>
 </div>
-<div id="risk-factors-associated-with-bsi" class="section level2">
-<h2>6. Risk factors associated with BSI</h2>
+<div id="proportion-of-patients-with-habsi" class="section level3">
+<h3>Proportion of patients with HABSI</h3>
+<pre class="r"><code>habsi_prop &lt;- function(x, factor = 100, digits = 3) {
+  x %&gt;% 
+    select(habsi) %&gt;% 
+    drop_na() %&gt;% 
+    group_by(habsi) %&gt;% # habsi is boolean
+    tally() %&gt;% 
+    pull(n) %&gt;% 
+    rev() %&gt;% 
+    calc_prop(factor, digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>habsi_prop(data2)</code></pre>
+<pre><code>## [1] &quot;8.044 (5.967, 10.729)&quot;</code></pre>
+</div>
+<div id="number-of-central-line-days" class="section level3">
+<h3>Number of central line days</h3>
+<pre class="r"><code>nb_cl_days_fct &lt;- function(x) {
+  sum(x$nb_cl_days, na.rm = TRUE) %&gt;% 
+    as.numeric() %&gt;% 
+    as.character()
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>nb_cl_days_fct(data2)</code></pre>
+<pre><code>## [1] &quot;3677&quot;</code></pre>
+</div>
+<div id="central-line-utilization-ratio" class="section level3">
+<h3>Central line utilization ratio</h3>
+<pre class="r"><code>cl_utilization_ratio &lt;- function(x, factor = 1000, digits = 3) {
+  x %&gt;% 
+    select(nb_cl_days, rand2icu) %&gt;% 
+    drop_na() %&gt;% 
+    summarise_all(sum) %&gt;% 
+    unlist() %&gt;% 
+    calc_prop(factor, digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>cl_utilization_ratio(data2)</code></pre>
+<pre><code>## [1] &quot;312.885 (304.499, 321.394)&quot;</code></pre>
+</div>
+<div id="clbsi-rate" class="section level3">
+<h3>CLBSI rate</h3>
+<pre class="r"><code>clbsi_rate &lt;- function(x, factor = 1000, digits = 3) {
+  x %&gt;% 
+    select(CLBSI, nb_cl_days) %&gt;% 
+    drop_na() %&gt;% 
+    summarise_all(sum) %&gt;% 
+    unlist() %&gt;% 
+    calc_prop(factor, digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>clbsi_rate(data2)</code></pre>
+<pre><code>## [1] &quot;8.431 (5.833, 12.101)&quot;</code></pre>
+<div id="putting-together" class="section level4">
+<h4>Putting together</h4>
+<pre class="r"><code>make1row &lt;- function(x) {
+    map(list(habsi_rate, habsi_prop, nb_cl_days_fct, cl_utilization_ratio, clbsi_rate),
+        function(f) f(x)) %&gt;%
+    as.data.frame(stringsAsFactors = FALSE) %&gt;% 
+    unname()
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>make1row(data2)</code></pre>
+<pre><code>##                                                                                                   
+## 1 3.765 (2.769, 5.099) 8.044 (5.967, 10.729) 3677 312.885 (304.499, 321.394) 8.431 (5.833, 12.101)</code></pre>
+<pre class="r"><code>make1group &lt;- function(x) {
+  data2 %&gt;% 
+    filter(! is.na(.[[x]])) %&gt;% 
+    group_by(.[[x]]) %&gt;% 
+    group_modify(~ make1row(.x)) %&gt;% 
+    ungroup()
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>make1group(&quot;hospital&quot;)</code></pre>
+<pre><code>## # A tibble: 3 x 6
+##   `.[[x]]` V1                   V2                    V3    V4                         V5                    
+##   &lt;chr&gt;    &lt;chr&gt;                &lt;chr&gt;                 &lt;chr&gt; &lt;chr&gt;                      &lt;chr&gt;                 
+## 1 BVTV     4.161 (2.116, 7.912) 8 (4.117, 14.588)     946   385.352 (365.885, 405.188) 9.514 (4.65, 18.667)  
+## 2 HTD      3.517 (2.284, 5.364) 8.487 (5.572, 12.626) 1260  192.69 (183.237, 202.507)  10.317 (5.747, 18.069)
+## 3 NHTD     4.006 (2.108, 7.392) 7.285 (3.875, 12.976) 1471  535.688 (516.816, 554.46)  6.118 (2.989, 12.029)</code></pre>
+<p>let’s consider the following groups:</p>
+<pre class="r"><code>groups &lt;- c(&quot;hospital&quot;, &quot;Tetanus&quot;, &quot;ALBSI&quot;, &quot;tracheostomy&quot;, &quot;deathICU&quot;, &quot;death28&quot;, &quot;death90&quot;)</code></pre>
+<p>This will be the names of the columns in the final data frame:</p>
+<pre class="r"><code>col_names &lt;- c(&quot;group&quot;, &quot;HABSI rate&quot;, &quot;proportion of HABSI&quot;, &quot;# CL days&quot;, &quot;CL utilization ratio&quot;, &quot;CLBSI rate&quot;)</code></pre>
+<p>Let’s compute the statistics for all the groups:</p>
+<pre class="r"><code>out &lt;- map(groups, make1group) %&gt;% 
+  c(list(as.data.frame(c(&quot;all&quot;, make1row(data2)), stringsAsFactors = FALSE)), .) %&gt;% 
+  lapply(setNames, col_names) %&gt;% 
+  lapply(mutate_at, 1, as.character)</code></pre>
+<p>The intermediate titles:</p>
+<pre class="r"><code>inter &lt;- lapply(groups, function(x) {
+                          x %&gt;%
+                            c(rep(&quot;&quot;, 5)) %&gt;% 
+                            t() %&gt;% 
+                            as.data.frame(stringsAsFactors = FALSE) %&gt;% 
+                            setNames(col_names)
+                        })</code></pre>
+<p>let’s put everything together:</p>
+<pre class="r"><code>lapply(1:7, function(x) c(out[x], inter[x])) %&gt;%
+  unlist(FALSE) %&gt;% 
+  c(out[8]) %&gt;% 
+  bind_rows()</code></pre>
+<pre><code>##           group              HABSI rate     proportion of HABSI # CL days       CL utilization ratio                CLBSI rate
+## 1           all    3.765 (2.769, 5.099)   8.044 (5.967, 10.729)      3677 312.885 (304.499, 321.394)     8.431 (5.833, 12.101)
+## 2      hospital                                                                                                               
+## 3          BVTV    4.161 (2.116, 7.912)       8 (4.117, 14.588)       946 385.352 (365.885, 405.188)      9.514 (4.65, 18.667)
+## 4           HTD    3.517 (2.284, 5.364)   8.487 (5.572, 12.626)      1260  192.69 (183.237, 202.507)    10.317 (5.747, 18.069)
+## 5          NHTD    4.006 (2.108, 7.392)   7.285 (3.875, 12.976)      1471  535.688 (516.816, 554.46)     6.118 (2.989, 12.029)
+## 6       Tetanus                                                                                                               
+## 7         FALSE    3.059 (1.966, 4.711)    5.656 (3.661, 8.565)      2358  325.083 (314.285, 336.07)     8.058 (4.999, 12.808)
+## 8          TRUE    4.893 (3.145, 7.532)   13.924 (9.119, 20.54)      1319 293.372 (280.134, 306.965)     9.098 (4.936, 16.313)
+## 9         ALBSI                                                                                                               
+## 10        FALSE    2.078 (1.349, 3.171)    4.205 (2.744, 6.338)      3579 321.616 (312.931, 330.425)       4.75 (2.861, 7.765)
+## 11         TRUE 33.762 (21.547, 52.017)             NA (NA, NA)        98 157.556 (130.298, 189.136) 142.857 (83.103, 231.463)
+## 12 tracheostomy                                                                                                               
+## 13        FALSE   7.055 (4.583, 10.748) 20.536 (13.718, 29.421)       555 170.245 (157.585, 183.691)   27.027 (15.763, 45.214)
+## 14         TRUE    1.497 (0.811, 2.693)     2.797 (1.522, 4.97)      3052 378.149 (367.534, 388.882)      2.294 (1.005, 4.946)
+## 15     deathICU                                                                                                               
+## 16        FALSE      3.04 (2.06, 4.454)   7.487 (5.119, 10.761)      2492 268.404 (259.398, 277.604)     6.421 (3.803, 10.652)
+## 17         TRUE   6.457 (3.825, 10.712)   9.249 (5.548, 14.834)      1185 478.208 (458.388, 498.096)    12.658 (7.367, 21.301)
+## 18      death28                                                                                                               
+## 19        FALSE    3.437 (2.444, 4.809)   9.499 (6.828, 13.018)      2878    272.84 (264.347, 281.5)     8.339 (5.471, 12.586)
+## 20         TRUE    6.595 (3.07, 13.502)    4.762 (2.231, 9.492)       799 658.697 (631.133, 685.245)     8.761 (3.844, 18.806)
+## 21      death90                                                                                                               
+## 22        FALSE    3.093 (2.096, 4.532)   8.116 (5.554, 11.646)      2446 268.007 (258.928, 277.284)     6.541 (3.875, 10.851)
+## 23         TRUE    6.07 (3.595, 10.071)   7.921 (4.742, 12.771)      1231 466.995 (447.823, 486.265)    12.185 (7.092, 20.509)</code></pre>
+</div>
+</div>
+</div>
+<div id="a.-risk-factors-associated-with-bsi-logistic-regression" class="section level2">
+<h2>6A. Risk factors associated with BSI (logistic regression)</h2>
+<p>The following function transform a continuous variable into a categorical variable with equal amount of data in each category:</p>
+<pre class="r"><code>makecat &lt;- function(x, n = 3) {
+  cut(x, quantile(x, seq(0, 1, le = n + 1)), include.lowest = TRUE)
+}</code></pre>
+<p>The data set to use here:</p>
+<pre class="r"><code>data3 &lt;- data2 %&gt;% 
+  select(habsi, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu) %&gt;% 
+  drop_na() %&gt;% 
+  mutate_at(&quot;adm2icu&quot;, as.numeric) %&gt;% 
+  mutate_at(vars(age, adm2icu, apache), makecat)</code></pre>
+<div id="numbers-of-bsi-and-non-bsi" class="section level3">
+<h3>Numbers of BSI and non-BSI</h3>
+<pre class="r"><code>n_and_perc &lt;- function(x, y) {
+  paste0(x, &quot; (&quot;, y, &quot; %)&quot;)
+}</code></pre>
+<pre class="r"><code>n_and_percentage &lt;- function(var) {
+  a &lt;- as.numeric(table(data3[[var]], data3$habsi))
+  map2(a, round(100 * a / sum(a), 2), n_and_perc) %&gt;% 
+    unlist() %&gt;% 
+    matrix(ncol = 2)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>n_and_percentage(&quot;age&quot;)</code></pre>
+<pre><code>##      [,1]            [,2]         
+## [1,] &quot;164 (31.66 %)&quot; &quot;10 (1.93 %)&quot;
+## [2,] &quot;171 (33.01 %)&quot; &quot;8 (1.54 %)&quot; 
+## [3,] &quot;148 (28.57 %)&quot; &quot;17 (3.28 %)&quot;</code></pre>
+<p>All the variables we are interested in:</p>
+<pre class="r"><code>variables &lt;- data3 %&gt;% 
+  names() %&gt;% 
+  setdiff(&quot;habsi&quot;)</code></pre>
+<p>For all the variables:</p>
+<pre class="r"><code>numbers &lt;- lapply(variables, n_and_percentage) %&gt;% 
+  reduce(rbind)</code></pre>
+</div>
+<div id="univariate-analyses" class="section level3">
+<h3>Univariate analyses</h3>
+<pre class="r"><code>glm_coef &lt;- function(x, digits = 4) {
+  m &lt;- glm(data3$habsi ~ data3[[x]], binomial)
+  c &lt;- coef(m)[-1]
+  ci &lt;- confint(m)[-1, ]
+  if (! is.matrix(ci)) ci &lt;- as.matrix(t(ci))
+  cbind(c, ci) %&gt;% 
+    exp() %&gt;% 
+    round(digits) %&gt;% 
+    apply(1, put_in_shape) %&gt;%
+    as.matrix()
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>glm_coef(&quot;age&quot;)</code></pre>
+<pre><code>## Waiting for profiling to be done...</code></pre>
+<pre><code>##                    [,1]                     
+## data3[[x]](46,65]  &quot;0.7673 (0.2864, 1.9923)&quot;
+## data3[[x]](65,104] &quot;1.8838 (0.8495, 4.3907)&quot;</code></pre>
+<p>For all the variables:</p>
+<pre class="r"><code>calc_c_uni &lt;- function(f) {
+  variables %&gt;% 
+    lapply(f) %&gt;% 
+    map(~ c(&quot;&quot;, .x)) %&gt;% 
+    unlist()
+}</code></pre>
+<p><span class="math inline">\(p\)</span>-values:</p>
+<pre class="r"><code>glm_p &lt;- function(x, digits = 4) {
+  glm(data3$habsi ~ data3[[x]], binomial) %&gt;% 
+    anova(test = &quot;LRT&quot;) %&gt;% 
+    extract2(&quot;Pr(&gt;Chi)&quot;) %&gt;% 
+    magrittr::extract(2) %&gt;% 
+    round(digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>glm_p(&quot;Sex&quot;)</code></pre>
+<pre><code>## [1] 0.0493</code></pre>
+<p>The number of levels per variable:</p>
+<pre class="r"><code>nb_lev &lt;- sapply(variables, function(x) length(unique(data3[[x]])))</code></pre>
+<p>The blanks we need to add to the outputs:</p>
+<pre class="r"><code>blanks &lt;- map(nb_lev - 1, ~ rep(&quot;&quot;, .x))</code></pre>
+<p>The function that adds the blanks:</p>
+<pre class="r"><code>add_blanks &lt;- function(x) {
+  map2(x, blanks, ~ c(.x, .y))
+}</code></pre>
+<p>For all the variables:</p>
+<pre class="r"><code>calc_p_uni &lt;- function(f) {
+  variables %&gt;% 
+    sapply(f) %&gt;% 
+    add_blanks() %&gt;% 
+    unlist()
+}</code></pre>
+</div>
+<div id="multivariate-analyses" class="section level3">
+<h3>Multivariate analyses</h3>
+<pre class="r"><code>m &lt;- glm(habsi ~ ., binomial, data3)</code></pre>
+<pre class="r"><code>calc_c_multi &lt;- function(x) {
+  x %&gt;% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %&gt;% 
+    reduce(cbind) %&gt;% 
+    (function(y) {if(&quot;glm&quot; %in% class(x)) return(magrittr::extract(y, -1, )); y}) %&gt;% 
+    exp() %&gt;% 
+    round(3) %&gt;% 
+    apply(1, put_in_shape) %&gt;% 
+    split(rep(seq_along(nb_lev), nb_lev - 1)) %&gt;% 
+    map(~ c(&quot;&quot;, .x)) %&gt;% 
+    unlist()
+}</code></pre>
+<pre class="r"><code>calc_p_multi &lt;- function(x) {
+  x %&gt;% 
+    car::Anova(test = &quot;LR&quot;) %&gt;% 
+    extract2(&quot;Pr(&gt;Chisq)&quot;) %&gt;% 
+    round(4) %&gt;% 
+    add_blanks() %&gt;% 
+    unlist()
+}</code></pre>
+</div>
+<div id="putting-together-1" class="section level3">
+<h3>Putting together</h3>
+<pre class="r"><code>cbind(numbers, calc_c_uni(glm_coef), calc_p_uni(glm_p), calc_c_multi(m), calc_p_multi(m)) %&gt;%
+  as.data.frame(., row.names(.), stringsAsFactors = FALSE)</code></pre>
+<pre><code>## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...
+## Waiting for profiling to be done...</code></pre>
+<pre><code>##                          V1          V2                         V3     V4                      V5     V6
+## Sex1          156 (30.12 %)  6 (1.16 %)                            0.0493                         0.1846
+## Sex2          327 (63.13 %)  29 (5.6 %)    2.3058 (1.0025, 6.2548)           2.016 (0.725, 6.349)       
+## age1          164 (31.66 %) 10 (1.93 %)                             0.089                         0.2056
+## age2          171 (33.01 %)  8 (1.54 %)    0.7673 (0.2864, 1.9923)           0.756 (0.235, 2.371)       
+## age3          148 (28.57 %) 17 (3.28 %)    1.8838 (0.8495, 4.3907)            1.915 (0.62, 6.119)       
+## hospital1     109 (21.04 %)  5 (0.97 %)                            0.4636                         0.0162
+## hospital2     251 (48.46 %) 21 (4.05 %)     1.8239 (0.7216, 5.574)            0.171 (0.01, 2.053)       
+## hospital3     123 (23.75 %)  9 (1.74 %)    1.5951 (0.5342, 5.3251)          1.701 (0.252, 12.664)       
+## apache1       185 (35.71 %) 19 (3.67 %)                            0.1727                         0.6058
+## apache2       143 (27.61 %)  7 (1.35 %)     0.4766 (0.182, 1.1173)           0.791 (0.226, 2.532)       
+## apache3       155 (29.92 %)  9 (1.74 %)     0.5654 (0.2376, 1.253)             1.6 (0.347, 7.558)       
+## charlson_cat1 296 (57.14 %) 24 (4.63 %)                            0.1661                         0.1223
+## charlson_cat2 113 (21.81 %)  4 (0.77 %)    0.4366 (0.1262, 1.1603)           0.473 (0.094, 1.856)       
+## charlson_cat3   33 (6.37 %)  5 (0.97 %)    1.8687 (0.5984, 4.8784)            4.904 (0.75, 35.85)       
+## charlson_cat4   41 (7.92 %)  2 (0.39 %)    0.6016 (0.0945, 2.1311)           1.181 (0.145, 6.299)       
+## sepsis1       362 (69.88 %) 31 (5.98 %)                              0.05                         0.4311
+## sepsis2       121 (23.36 %)  4 (0.77 %)          0.386 (0.1131, 1)           0.531 (0.095, 2.504)       
+## Tetanus1      335 (64.67 %)  14 (2.7 %)                             6e-04                         0.4741
+## Tetanus2      148 (28.57 %) 21 (4.05 %)    3.3953 (1.6949, 7.0016)           0.493 (0.069, 3.502)       
+## CNS1          380 (73.36 %) 32 (6.18 %)                            0.0479                         0.6554
+## CNS2          103 (19.88 %)  3 (0.58 %)     0.3459 (0.082, 0.9912)            0.636 (0.08, 4.715)       
+## dia_co1       358 (69.11 %)  29 (5.6 %)                            0.2324                          0.605
+## dia_co2       125 (24.13 %)  6 (1.16 %)     0.5926 (0.218, 1.3675)           0.706 (0.173, 2.568)       
+## Mode1         470 (90.73 %) 34 (6.56 %)                            0.9539                         0.3514
+## Mode2           13 (2.51 %)  1 (0.19 %)    1.0633 (0.0577, 5.5866)           0.257 (0.007, 4.014)       
+## had_catheter1 213 (41.12 %) 11 (2.12 %)                             0.138                         0.8918
+## had_catheter2 270 (52.12 %) 24 (4.63 %)      1.7212 (0.8435, 3.73)           1.069 (0.411, 2.835)       
+## had_arterial1  345 (66.6 %)  15 (2.9 %)                             7e-04                         0.0133
+## had_arterial2 138 (26.64 %) 20 (3.86 %)    3.3333 (1.6663, 6.8055)          3.615 (1.302, 10.777)       
+## tracheostomy1 110 (21.24 %) 23 (4.44 %)                                 0                          1e-04
+## tracheostomy2 373 (72.01 %) 12 (2.32 %)    0.1539 (0.0719, 0.3136)           0.054 (0.009, 0.248)       
+## adm2icu1      174 (33.59 %)  1 (0.19 %)                                 0                          1e-04
+## adm2icu2      161 (31.08 %) 11 (2.12 %) 11.8882 (2.2747, 218.5321)        10.949 (1.583, 258.515)       
+## adm2icu3      148 (28.57 %) 23 (4.44 %)  27.0405 (5.5956, 486.711)        29.364 (4.432, 703.221)</code></pre>
+</div>
+</div>
+<div id="b.-risk-factors-associated-with-bsi-cox-regression" class="section level2">
+<h2>6B. Risk factors associated with BSI (Cox regression)</h2>
+<p>The data:</p>
+<pre class="r"><code>data4 &lt;- data2 %&gt;% 
+  select(habsi, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, time2bsi) %&gt;% 
+  drop_na() %&gt;% 
+  mutate_at(&quot;adm2icu&quot;, as.numeric) %&gt;% 
+  mutate_at(vars(age, adm2icu, apache), makecat)</code></pre>
+<pre class="r"><code>cox_coef &lt;- function(x, digits = 4) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %&gt;% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %&gt;% 
+    reduce(cbind) %&gt;% 
+    exp() %&gt;% 
+    round(digits) %&gt;% 
+    apply(1, put_in_shape) %&gt;% 
+    as.matrix()
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>cox_coef(&quot;age&quot;)</code></pre>
+<pre><code>##                    [,1]                     
+## data4[[x]](46,65]  &quot;0.9425 (0.3686, 2.4098)&quot;
+## data4[[x]](65,104] &quot;1.5527 (0.7089, 3.401)&quot;</code></pre>
+<p><span class="math inline">\(p\)</span>-values:</p>
+<pre class="r"><code>cox_p &lt;- function(x, digits = 4) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %&gt;% 
+    anova() %&gt;% 
+    extract2(&quot;Pr(&gt;|Chi|)&quot;) %&gt;% 
+    magrittr::extract(2) %&gt;% 
+    round(digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>cox_p(&quot;Sex&quot;)</code></pre>
+<pre><code>## [1] 0.01</code></pre>
+<p>Multivariate model:</p>
+<pre class="r"><code>m &lt;- coxph(Surv(time2bsi, habsi) ~ ., data4)</code></pre>
+<p>All together:</p>
+<pre class="r"><code>cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_multi(m)) %&gt;% 
+  as.data.frame(., row.names(.), stringsAsFactors = FALSE)</code></pre>
+<pre><code>##                          V1          V2                       V3     V4                    V5     V6
+## Sex1          156 (30.12 %)  6 (1.16 %)                            0.01                       0.1875
+## Sex2          327 (63.13 %)  29 (5.6 %)   2.859 (1.1796, 6.9294)         1.951 (0.691, 5.512)       
+## age1          164 (31.66 %) 10 (1.93 %)                          0.3938                       0.8393
+## age2          171 (33.01 %)  8 (1.54 %)  0.9425 (0.3686, 2.4098)          0.965 (0.337, 2.76)       
+## age3          148 (28.57 %) 17 (3.28 %)   1.5527 (0.7089, 3.401)          1.266 (0.45, 3.566)       
+## hospital1     109 (21.04 %)  5 (0.97 %)                          0.6891                       0.0014
+## hospital2     251 (48.46 %) 21 (4.05 %)  1.4097 (0.5297, 3.7517)         0.151 (0.014, 1.626)       
+## hospital3     123 (23.75 %)  9 (1.74 %)  1.5927 (0.5256, 4.8263)        2.074 (0.353, 12.182)       
+## apache1       185 (35.71 %) 19 (3.67 %)                          0.2808                       0.2779
+## apache2       143 (27.61 %)  7 (1.35 %)  0.5137 (0.2153, 1.2258)         1.038 (0.355, 3.036)       
+## apache3       155 (29.92 %)  9 (1.74 %)  0.7125 (0.3209, 1.5822)         2.66 (0.689, 10.277)       
+## charlson_cat1 296 (57.14 %) 24 (4.63 %)                          0.2749                       0.2011
+## charlson_cat2 113 (21.81 %)  4 (0.77 %)    0.62 (0.2149, 1.7887)         0.562 (0.161, 1.966)       
+## charlson_cat3   33 (6.37 %)  5 (0.97 %)  2.2271 (0.8435, 5.8798)        3.461 (0.692, 17.309)       
+## charlson_cat4   41 (7.92 %)  2 (0.39 %)   0.6821 (0.161, 2.8899)         1.323 (0.254, 6.882)       
+## sepsis1       362 (69.88 %) 31 (5.98 %)                          0.5773                       0.5728
+## sepsis2       121 (23.36 %)  4 (0.77 %)  0.7505 (0.2636, 2.1366)          0.67 (0.163, 2.753)       
+## Tetanus1      335 (64.67 %)  14 (2.7 %)                          0.0132                       0.7146
+## Tetanus2      148 (28.57 %) 21 (4.05 %)  2.3788 (1.1862, 4.7704)         0.719 (0.123, 4.196)       
+## CNS1          380 (73.36 %) 32 (6.18 %)                           0.011                       0.8412
+## CNS2          103 (19.88 %)  3 (0.58 %)  0.2733 (0.0832, 0.8977)         0.829 (0.132, 5.208)       
+## dia_co1       358 (69.11 %)  29 (5.6 %)                          0.6885                       0.3927
+## dia_co2       125 (24.13 %)  6 (1.16 %)  0.8376 (0.3465, 2.0246)         0.607 (0.189, 1.949)       
+## Mode1         470 (90.73 %) 34 (6.56 %)                          0.7934                       0.4337
+## Mode2           13 (2.51 %)  1 (0.19 %)  1.3206 (0.1798, 9.6989)          0.384 (0.031, 4.81)       
+## had_catheter1 213 (41.12 %) 11 (2.12 %)                           0.268                       0.9842
+## had_catheter2 270 (52.12 %) 24 (4.63 %)  1.4879 (0.7255, 3.0514)         1.009 (0.417, 2.444)       
+## had_arterial1  345 (66.6 %)  15 (2.9 %)                          0.0015                       0.0356
+## had_arterial2 138 (26.64 %) 20 (3.86 %)    2.967 (1.5136, 5.816)         2.655 (1.043, 6.754)       
+## tracheostomy1 110 (21.24 %) 23 (4.44 %)                               0                            0
+## tracheostomy2 373 (72.01 %) 12 (2.32 %)  0.2013 (0.0987, 0.4108)         0.036 (0.009, 0.145)       
+## adm2icu1      174 (33.59 %)  1 (0.19 %)                          0.6493                       0.8486
+## adm2icu2      161 (31.08 %) 11 (2.12 %) 2.3637 (0.2937, 19.0201)          1.12 (0.125, 9.995)       
+## adm2icu3      148 (28.57 %) 23 (4.44 %) 2.3594 (0.2932, 18.9834)         1.422 (0.16, 12.626)</code></pre>
 </div>
 <div id="risk-factors-associated-with-mortality" class="section level2">
 <h2>7. Risk factors associated with mortality</h2>
+<p>The same as above for mortality, with only the Cox regression:</p>
+<p>The data:</p>
+<pre class="r"><code>data5 &lt;- data2 %&gt;% 
+  select(death90, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, DOD) %&gt;% 
+  drop_na() %&gt;% 
+  mutate_at(&quot;adm2icu&quot;, as.numeric) %&gt;% 
+  mutate_at(vars(age, adm2icu, apache), makecat)</code></pre>
+<pre class="r"><code>variables &lt;- data5 %&gt;% 
+  names() %&gt;% 
+  setdiff(c(&quot;death90&quot;, &quot;DOD&quot;))</code></pre>
+<pre class="r"><code>numbers &lt;- lapply(variables, n_and_percentage) %&gt;% 
+  reduce(rbind)</code></pre>
+<pre class="r"><code>cox_coef &lt;- function(x, digits = 4) {
+  coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %&gt;% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %&gt;% 
+    reduce(cbind) %&gt;% 
+    exp() %&gt;% 
+    round(digits) %&gt;% 
+    apply(1, put_in_shape) %&gt;% 
+    as.matrix()
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>cox_coef(&quot;age&quot;)</code></pre>
+<pre><code>##                    [,1]                     
+## data5[[x]](46,65]  &quot;1.1497 (0.7957, 1.6613)&quot;
+## data5[[x]](65,104] &quot;1.2563 (0.8695, 1.8153)&quot;</code></pre>
+<p><span class="math inline">\(p\)</span>-values:</p>
+<pre class="r"><code>cox_p &lt;- function(x, digits = 4) {
+  coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %&gt;% 
+    anova() %&gt;% 
+    extract2(&quot;Pr(&gt;|Chi|)&quot;) %&gt;% 
+    magrittr::extract(2) %&gt;% 
+    round(digits)
+}</code></pre>
+<p>Let’s try it:</p>
+<pre class="r"><code>cox_p(&quot;Sex&quot;)</code></pre>
+<pre><code>## [1] 0.9743</code></pre>
+<p>Multivariate model:</p>
+<pre class="r"><code>m &lt;- coxph(Surv(DOD, as.numeric(death90)) ~ ., data5)</code></pre>
+<p>All together:</p>
+<pre class="r"><code>cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_multi(m)) %&gt;% 
+  as.data.frame(., row.names(.), stringsAsFactors = FALSE)</code></pre>
+<pre><code>##                          V1          V2                      V3     V4                   V5     V6
+## Sex1          156 (30.12 %)  6 (1.16 %)                         0.9743                       0.834
+## Sex2          327 (63.13 %)  29 (5.6 %) 1.0053 (0.7306, 1.3832)        1.038 (0.735, 1.465)       
+## age1          164 (31.66 %) 10 (1.93 %)                         0.4715                      0.6327
+## age2          171 (33.01 %)  8 (1.54 %) 1.1497 (0.7957, 1.6613)         0.899 (0.595, 1.36)       
+## age3          148 (28.57 %) 17 (3.28 %) 1.2563 (0.8695, 1.8153)        1.089 (0.692, 1.713)       
+## hospital1     109 (21.04 %)  5 (0.97 %)                              0                      0.0019
+## hospital2     251 (48.46 %) 21 (4.05 %) 0.4136 (0.2878, 0.5944)        0.647 (0.373, 1.122)       
+## hospital3     123 (23.75 %)  9 (1.74 %)  0.8836 (0.609, 1.2822)        1.406 (0.862, 2.293)       
+## apache1       185 (35.71 %) 19 (3.67 %)                              0                       0.001
+## apache2       143 (27.61 %)  7 (1.35 %) 3.0179 (1.9417, 4.6905)        1.695 (1.034, 2.778)       
+## apache3       155 (29.92 %)  9 (1.74 %)  4.6932 (3.097, 7.1119)         2.47 (1.495, 4.082)       
+## charlson_cat1 296 (57.14 %) 24 (4.63 %)                              0                       6e-04
+## charlson_cat2 113 (21.81 %)  4 (0.77 %) 1.6896 (1.1784, 2.4226)        1.468 (0.972, 2.216)       
+## charlson_cat3   33 (6.37 %)  5 (0.97 %) 1.7299 (1.0129, 2.9543)        1.374 (0.702, 2.688)       
+## charlson_cat4   41 (7.92 %)  2 (0.39 %)   3.38 (2.2228, 5.1395)        3.092 (1.853, 5.158)       
+## sepsis1       362 (69.88 %) 31 (5.98 %)                              0                      0.9354
+## sepsis2       121 (23.36 %)  4 (0.77 %)  2.4178 (1.7779, 3.288)         0.985 (0.683, 1.42)       
+## Tetanus1      335 (64.67 %)  14 (2.7 %)                              0                      0.0287
+## Tetanus2      148 (28.57 %) 21 (4.05 %)  0.1626 (0.0972, 0.272)        0.432 (0.199, 0.937)       
+## CNS1          380 (73.36 %) 32 (6.18 %)                         0.3331                      0.3976
+## CNS2          103 (19.88 %)  3 (0.58 %)    1.1919 (0.84, 1.691)        1.229 (0.764, 1.975)       
+## dia_co1       358 (69.11 %)  29 (5.6 %)                          7e-04                       0.293
+## dia_co2       125 (24.13 %)  6 (1.16 %) 1.7487 (1.2797, 2.3897)        0.814 (0.555, 1.196)       
+## Mode1         470 (90.73 %) 34 (6.56 %)                         0.8672                      0.4994
+## Mode2           13 (2.51 %)  1 (0.19 %) 1.0798 (0.4437, 2.6277)         0.71 (0.255, 1.976)       
+## had_catheter1 213 (41.12 %) 11 (2.12 %)                              0                           0
+## had_catheter2 270 (52.12 %) 24 (4.63 %) 2.7374 (1.9395, 3.8636)        2.753 (1.851, 4.094)       
+## had_arterial1  345 (66.6 %)  15 (2.9 %)                         0.2519                      0.0457
+## had_arterial2 138 (26.64 %) 20 (3.86 %)    1.2025 (0.88, 1.643)         1.544 (1.01, 2.362)       
+## tracheostomy1 110 (21.24 %) 23 (4.44 %)                              0                      0.3148
+## tracheostomy2 373 (72.01 %) 12 (2.32 %) 4.2545 (2.5438, 7.1155)        0.693 (0.344, 1.397)       
+## adm2icu1      174 (33.59 %)  1 (0.19 %)                              0                           0
+## adm2icu2      161 (31.08 %) 11 (2.12 %) 0.2935 (0.2054, 0.4194)         0.302 (0.203, 0.45)       
+## adm2icu3      148 (28.57 %) 23 (4.44 %) 0.2046 (0.1377, 0.3041)        0.176 (0.114, 0.273)</code></pre>
 </div>
 <div id="kaplanmeier-analysis" class="section level2">
 <h2>8. Kaplan–Meier analysis</h2>

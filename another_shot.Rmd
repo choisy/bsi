@@ -49,8 +49,8 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
                       dev.args = list(pointsize = 11), fig.height = 3.5,
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
-options(width = 137)
-#options(width = 253)
+#options(width = 137)
+options(width = 253)
 ```
 
 ## 0. Packages
@@ -74,6 +74,7 @@ library(lubridate)
 library(tibble)
 library(stringr)
 library(C306)
+library(survival)
 #library(huxtable)
 ```
 
@@ -437,6 +438,8 @@ data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
          adm2icu      = ICUDateFINISH - HospitalDate,
          adm2hos      = HosDate - HospitalDate,
          ICUstay      = ICUDateFINISH - ICUDateADM,
+# time of BSI potential event:
+         time2bsi     = ifelse(is.na(first_BSI), ICUDateFINISH, first_BSI) - as.numeric(RandDate),
 # death at hospital discharge:
 #         deathHOSdis  = OutCome < 3,
 # death at ICU discharge:
@@ -667,13 +670,15 @@ data2 %<>% left_join(select(apache_trinh, PatientNo, total_score) %>% rename(apa
 ```{r}
 data2 <- readRDS("death_day.full.rds") %>% 
   mutate(death28 = Event > 0  & DOD < 29,
-         death90 = Event > 0  & DOD < 91) %>% 
-  select(PatientNo, death28, death90) %>% 
+         death90 = Event > 0  & DOD < 91) %>%
+  select(PatientNo, death28, death90, DOD) %>% 
   left_join(select(readRDS("icu_mortality.full.rds"), -IsTetanus), "PatientNo") %>% 
   rename(deathICU = IsDeath) %>% 
   left_join(data2, ., "PatientNo") %>% 
   mutate(VARI = as.character(VARI) == "VARI")
 ```
+
+Note that there are 6 missing values in `DOD`.
 
 ### Filtering the data set
 
@@ -689,8 +694,8 @@ data2 %<>%
   select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy,
          CLBSI_risk, ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis,
          CNS, COPD, CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu,
-         adm2hos, had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi,
-         habsi_risk, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU,
+         adm2hos, time2bsi, had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi,
+         habsi_risk, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, DOD, death28, death90, deathICU,
          VARI, nb_bsi, nb_path_bsi1) %>% 
   mutate_if(is.numeric, as.integer)
 ```
@@ -1232,13 +1237,18 @@ lapply(1:7, function(x) c(out[x], inter[x])) %>%
   bind_rows()
 ```
 
-## 6. Risk factors associated with BSI
+## 6A. Risk factors associated with BSI (logistic regression)
+
+The following function transform a continuous variable into a categorical
+variable with equal amount of data in each category:
 
 ```{r}
 makecat <- function(x, n = 3) {
   cut(x, quantile(x, seq(0, 1, le = n + 1)), include.lowest = TRUE)
 }
 ```
+
+The data set to use here:
 
 ```{r}
 data3 <- data2 %>% 
@@ -1272,13 +1282,15 @@ Let's try it:
 n_and_percentage("age")
 ```
 
-For all the variables:
+All the variables we are interested in:
 
 ```{r}
 variables <- data3 %>% 
   names() %>% 
   setdiff("habsi")
 ```
+
+For all the variables:
 
 ```{r}
 numbers <- lapply(variables, n_and_percentage) %>% 
@@ -1288,7 +1300,7 @@ numbers <- lapply(variables, n_and_percentage) %>%
 ### Univariate analyses
 
 ```{r}
-OR_uni <- function(x, digits = 4) {
+glm_coef <- function(x, digits = 4) {
   m <- glm(data3$habsi ~ data3[[x]], binomial)
   c <- coef(m)[-1]
   ci <- confint(m)[-1, ]
@@ -1304,22 +1316,24 @@ OR_uni <- function(x, digits = 4) {
 Let's try it:
 
 ```{r}
-OR_uni("age")
+glm_coef("age")
 ```
 
 For all the variables:
 
 ```{r}
-or_uni <- variables %>%
-  lapply(OR_uni) %>%
-  map(~ c("", .x)) %>%
-  unlist()
+calc_c_uni <- function(f) {
+  variables %>% 
+    lapply(f) %>% 
+    map(~ c("", .x)) %>% 
+    unlist()
+}
 ```
 
 $p$-values:
 
 ```{r}
-Pr_uni <- function(x, digits = 4) {
+glm_p <- function(x, digits = 4) {
   glm(data3$habsi ~ data3[[x]], binomial) %>% 
     anova(test = "LRT") %>% 
     extract2("Pr(>Chi)") %>% 
@@ -1331,19 +1345,22 @@ Pr_uni <- function(x, digits = 4) {
 Let's try it:
 
 ```{r}
-Pr_uni("Sex")
+glm_p("Sex")
 ```
 
-For all the variables:
+The number of levels per variable:
 
 ```{r}
 nb_lev <- sapply(variables, function(x) length(unique(data3[[x]])))
 ```
 
+The blanks we need to add to the outputs:
+
 ```{r}
 blanks <- map(nb_lev - 1, ~ rep("", .x))
 ```
 
+The function that adds the blanks:
 
 ```{r}
 add_blanks <- function(x) {
@@ -1351,12 +1368,15 @@ add_blanks <- function(x) {
 }
 ```
 
+For all the variables:
 
 ```{r}
-p_uni <- variables %>%
-  sapply(Pr_uni) %>% 
-  add_blanks() %>% 
-  unlist()
+calc_p_uni <- function(f) {
+  variables %>% 
+    sapply(f) %>% 
+    add_blanks() %>% 
+    unlist()
+}
 ```
 
 ### Multivariate analyses
@@ -1366,35 +1386,173 @@ m <- glm(habsi ~ ., binomial, data3)
 ```
 
 ```{r}
-or_multi <- m %>% 
-  (function(x) map(c(coef, confint), function(f) f(x))) %>% 
-  reduce(cbind) %>% 
-  magrittr::extract(-1, ) %>% 
-  exp() %>% 
-  round(3) %>% 
-  apply(1, put_in_shape) %>% 
-  split(rep(seq_along(nb_lev), nb_lev - 1)) %>% 
-  map(~ c("", .x)) %>% 
-  unlist()
+calc_c_multi <- function(x) {
+  x %>% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
+    reduce(cbind) %>% 
+    (function(y) {if("glm" %in% class(x)) return(magrittr::extract(y, -1, )); y}) %>% 
+    exp() %>% 
+    round(3) %>% 
+    apply(1, put_in_shape) %>% 
+    split(rep(seq_along(nb_lev), nb_lev - 1)) %>% 
+    map(~ c("", .x)) %>% 
+    unlist()
+}
 ```
 
 ```{r}
-p_multi <- m %>% 
-  car::Anova(test = "LR") %>% 
-  extract2("Pr(>Chisq)") %>% 
-  round(4) %>% 
-  add_blanks() %>% 
-  unlist()
+calc_p_multi <- function(x) {
+  x %>% 
+    car::Anova(test = "LR") %>% 
+    extract2("Pr(>Chisq)") %>% 
+    round(4) %>% 
+    add_blanks() %>% 
+    unlist()
+}
 ```
 
 ### Putting together
 
 ```{r}
-cbind(numbers, or_uni, p_uni, or_multi, p_multi) %>%
-  as.data.frame(stringsAsFactors = FALSE)
+cbind(numbers, calc_c_uni(glm_coef), calc_p_uni(glm_p), calc_c_multi(m), calc_p_multi(m)) %>%
+  as.data.frame(., row.names(.), stringsAsFactors = FALSE)
 ```
 
+## 6B. Risk factors associated with BSI (Cox regression)
+
+The data:
+
+```{r}
+data4 <- data2 %>% 
+  select(habsi, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, time2bsi) %>% 
+  drop_na() %>% 
+  mutate_at("adm2icu", as.numeric) %>% 
+  mutate_at(vars(age, adm2icu, apache), makecat)
+```
+
+```{r}
+cox_coef <- function(x, digits = 4) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
+    reduce(cbind) %>% 
+    exp() %>% 
+    round(digits) %>% 
+    apply(1, put_in_shape) %>% 
+    as.matrix()
+}
+```
+
+Let's try it:
+
+```{r}
+cox_coef("age")
+```
+
+$p$-values:
+
+```{r}
+cox_p <- function(x, digits = 4) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
+    anova() %>% 
+    extract2("Pr(>|Chi|)") %>% 
+    magrittr::extract(2) %>% 
+    round(digits)
+}
+```
+
+Let's try it:
+
+```{r}
+cox_p("Sex")
+```
+
+Multivariate model:
+
+```{r}
+m <- coxph(Surv(time2bsi, habsi) ~ ., data4)
+```
+
+All together:
+
+```{r}
+cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_multi(m)) %>% 
+  as.data.frame(., row.names(.), stringsAsFactors = FALSE)
+```
 
 ## 7. Risk factors associated with mortality
+
+The same as above for mortality, with only the Cox regression:
+
+The data:
+
+```{r}
+data5 <- data2 %>% 
+  select(death90, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, DOD) %>% 
+  drop_na() %>% 
+  mutate_at("adm2icu", as.numeric) %>% 
+  mutate_at(vars(age, adm2icu, apache), makecat)
+```
+
+```{r}
+variables <- data5 %>% 
+  names() %>% 
+  setdiff(c("death90", "DOD"))
+```
+
+```{r}
+numbers <- lapply(variables, n_and_percentage) %>% 
+  reduce(rbind)
+```
+
+```{r}
+cox_coef <- function(x, digits = 4) {
+  coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %>% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
+    reduce(cbind) %>% 
+    exp() %>% 
+    round(digits) %>% 
+    apply(1, put_in_shape) %>% 
+    as.matrix()
+}
+```
+
+Let's try it:
+
+```{r}
+cox_coef("age")
+```
+
+$p$-values:
+
+```{r}
+cox_p <- function(x, digits = 4) {
+  coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %>% 
+    anova() %>% 
+    extract2("Pr(>|Chi|)") %>% 
+    magrittr::extract(2) %>% 
+    round(digits)
+}
+```
+
+Let's try it:
+
+```{r}
+cox_p("Sex")
+```
+
+Multivariate model:
+
+```{r}
+m <- coxph(Surv(DOD, as.numeric(death90)) ~ ., data5)
+```
+
+All together:
+
+```{r}
+cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_multi(m)) %>% 
+  as.data.frame(., row.names(.), stringsAsFactors = FALSE)
+```
 
 ## 8. Kaplan–Meier analysis
