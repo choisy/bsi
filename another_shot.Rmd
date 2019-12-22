@@ -1034,18 +1034,45 @@ path_freq_nonCLBSI / nb_non_clbsi
 
 ## 5. Derivation of BSI incidence rate
 
+```{r}
+extract_prop_test <- function(x) {
+  unname(unlist(x[c("estimate", "conf.int")]))
+}
+```
+
+
+
+```{r}
+put_in_shape <- function(x) {
+  paste0(x[1], " (", x[2], ", ", x[3], ")")
+}
+```
+
+
+
+```{r}
+calc_prop <- function(x, factor, digits) {
+  x %>%
+    as.list() %>% 
+    reduce(prop.test) %>% 
+    extract_prop_test() %>% 
+    multiply_by(factor) %>% 
+    round(digits) %>% 
+    put_in_shape()
+}
+```
+
+
 ### HABSI rate
 
 ```{r}
-habsi_rate <- function(x) {
+habsi_rate <- function(x, factor = 1000, digits = 3) {
   x %>% 
     select(habsi, rand2icu) %>% 
     drop_na() %>% 
     summarise_all(sum) %>% 
     unlist() %>% 
-    as.list() %>%
-    reduce(divide_by) %>% 
-    multiply_by(1000)
+    calc_prop(factor, digits)
 }
 ```
 
@@ -1058,7 +1085,7 @@ habsi_rate(data2)
 ### Proportion of patients with HABSI
 
 ```{r}
-habsi_prop <- function(x) {
+habsi_prop <- function(x, factor = 100, digits = 3) {
   x %>% 
     select(habsi) %>% 
     drop_na() %>% 
@@ -1066,9 +1093,7 @@ habsi_prop <- function(x) {
     tally() %>% 
     pull(n) %>% 
     rev() %>% 
-    as.list() %>% 
-    reduce(divide_by) %>% 
-    multiply_by(100)
+    calc_prop(factor, digits)
 }
 ```
 
@@ -1078,18 +1103,32 @@ Let's try it:
 habsi_prop(data2)
 ```
 
+### Number of central line days
+
+```{r}
+nb_cl_days_fct <- function(x) {
+  sum(x$nb_cl_days, na.rm = TRUE) %>% 
+    as.numeric() %>% 
+    as.character()
+}
+```
+
+Let's try it:
+
+```{r}
+nb_cl_days_fct(data2)
+```
+
 ### Central line utilization ratio
 
 ```{r}
-cl_utilization_ratio <- function(x) {
+cl_utilization_ratio <- function(x, factor = 1000, digits = 3) {
   x %>% 
-    select(CLBSI, nb_cl_days) %>% 
+    select(nb_cl_days, rand2icu) %>% 
     drop_na() %>% 
     summarise_all(sum) %>% 
     unlist() %>% 
-    as.list() %>% 
-    reduce(divide_by) %>% 
-    multiply_by(1000)
+    calc_prop(factor, digits)
 }
 ```
 
@@ -1097,6 +1136,100 @@ Let's try it:
 
 ```{r}
 cl_utilization_ratio(data2)
+```
+
+### CLBSI rate
+
+```{r}
+clbsi_rate <- function(x, factor = 1000, digits = 3) {
+  x %>% 
+    select(CLBSI, nb_cl_days) %>% 
+    drop_na() %>% 
+    summarise_all(sum) %>% 
+    unlist() %>% 
+    calc_prop(factor, digits)
+}
+```
+
+Let's try it:
+
+```{r}
+clbsi_rate(data2)
+```
+
+#### Putting together
+
+```{r}
+make1row <- function(x) {
+    map(list(habsi_rate, habsi_prop, nb_cl_days_fct, cl_utilization_ratio, clbsi_rate),
+        function(f) f(x)) %>%
+    as.data.frame(stringsAsFactors = FALSE) %>% 
+    unname()
+}
+```
+
+Let's try it:
+
+```{r}
+make1row(data2)
+```
+
+```{r}
+make1group <- function(x) {
+  data2 %>% 
+    filter(! is.na(.[[x]])) %>% 
+    group_by(.[[x]]) %>% 
+    group_modify(~ make1row(.x)) %>% 
+    ungroup()
+}
+```
+
+Let's try it:
+
+```{r}
+make1group("hospital")
+```
+
+let's consider the following groups:
+
+```{r}
+groups <- c("hospital", "Tetanus", "ALBSI", "tracheostomy", "deathICU", "death28", "death90")
+```
+
+This will be the names of the columns in the final data frame:
+
+```{r}
+col_names <- c("group", "HABSI rate", "proportion of HABSI", "# CL days", "CL utilization ratio", "CLBSI rate")
+```
+
+Let's compute the statistics for all the groups:
+
+```{r}
+out <- map(groups, make1group) %>% 
+  c(list(as.data.frame(c("all", make1row(data2)), stringsAsFactors = FALSE)), .) %>% 
+  lapply(setNames, col_names) %>% 
+  lapply(mutate_at, 1, as.character)
+```
+
+The intermediate titles:
+
+```{r}
+inter <- lapply(groups, function(x) {
+                          x %>%
+                            c(rep("", 5)) %>% 
+                            t() %>% 
+                            as.data.frame(stringsAsFactors = FALSE) %>% 
+                            setNames(col_names)
+                        })
+```
+
+let's put everything together:
+
+```{r}
+lapply(1:7, function(x) c(out[x], inter[x])) %>%
+  unlist(FALSE) %>% 
+  c(out[8]) %>% 
+  bind_rows()
 ```
 
 ## 6. Risk factors associated with BSI
