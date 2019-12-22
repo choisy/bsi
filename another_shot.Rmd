@@ -467,7 +467,7 @@ charlson <- data2 %>%
   mutate_at(vars(Meta, AIDS), function(x) 6 * x) %>% 
   mutate(Mode         = 3 * Mode) %>% 
   mutate(charlson     = select_if(., is.numeric) %>% rowSums(),
-         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %>% as.character())
+         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %>% as.character()) # not sure whether this should be here or later (depends on how many time it's used)
 ```
 
 Let's compare with Thinh:
@@ -686,12 +686,12 @@ data2 %<>% filter(! (IsCompleted > 1 & ! IsAgree),
 
 ```{r}
 data2 %<>% 
-  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy, CLBSI_risk,
-         ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis, CNS, COPD,
-         CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu, adm2hos,
-         had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi, habsi_risk,
-         CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU, VARI,
-         nb_bsi, nb_path_bsi1) %>% 
+  select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy,
+         CLBSI_risk, ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis,
+         CNS, COPD, CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu,
+         adm2hos, had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi,
+         habsi_risk, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, death28, death90, deathICU,
+         VARI, nb_bsi, nb_path_bsi1) %>% 
   mutate_if(is.numeric, as.integer)
 ```
 
@@ -1235,18 +1235,163 @@ lapply(1:7, function(x) c(out[x], inter[x])) %>%
 ## 6. Risk factors associated with BSI
 
 ```{r}
-OR_uni <- function(x, digits = 3) {
-  m <- glm(data2$habsi ~ data2[[x]], binomial)
-  exp(c(coef(m)[2], confint(m)[2, ])) %>% 
-    round(digits) %>% 
-    put_in_shape()
+makecat <- function(x, n = 3) {
+  cut(x, quantile(x, seq(0, 1, le = n + 1)), include.lowest = TRUE)
+}
+```
+
+```{r}
+data3 <- data2 %>% 
+  select(habsi, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu) %>% 
+  drop_na() %>% 
+  mutate_at("adm2icu", as.numeric) %>% 
+  mutate_at(vars(age, adm2icu, apache), makecat)
+```
+
+### Numbers of BSI and non-BSI
+
+```{r}
+n_and_perc <- function(x, y) {
+  paste0(x, " (", y, " %)")
+}
+```
+
+```{r}
+n_and_percentage <- function(var) {
+  a <- as.numeric(table(data3[[var]], data3$habsi))
+  map2(a, round(100 * a / sum(a), 2), n_and_perc) %>% 
+    unlist() %>% 
+    matrix(ncol = 2)
 }
 ```
 
 Let's try it:
 
 ```{r}
-OR_uni("Sex")
+n_and_percentage("age")
+```
+
+For all the variables:
+
+```{r}
+variables <- data3 %>% 
+  names() %>% 
+  setdiff("habsi")
+```
+
+```{r}
+numbers <- lapply(variables, n_and_percentage) %>% 
+  reduce(rbind)
+```
+
+### Univariate analyses
+
+```{r}
+OR_uni <- function(x, digits = 4) {
+  m <- glm(data3$habsi ~ data3[[x]], binomial)
+  c <- coef(m)[-1]
+  ci <- confint(m)[-1, ]
+  if (! is.matrix(ci)) ci <- as.matrix(t(ci))
+  cbind(c, ci) %>% 
+    exp() %>% 
+    round(digits) %>% 
+    apply(1, put_in_shape) %>%
+    as.matrix()
+}
+```
+
+Let's try it:
+
+```{r}
+OR_uni("age")
+```
+
+For all the variables:
+
+```{r}
+or_uni <- variables %>%
+  lapply(OR_uni) %>%
+  map(~ c("", .x)) %>%
+  unlist()
+```
+
+$p$-values:
+
+```{r}
+Pr_uni <- function(x, digits = 4) {
+  glm(data3$habsi ~ data3[[x]], binomial) %>% 
+    anova(test = "LRT") %>% 
+    extract2("Pr(>Chi)") %>% 
+    magrittr::extract(2) %>% 
+    round(digits)
+}
+```
+
+Let's try it:
+
+```{r}
+Pr_uni("Sex")
+```
+
+For all the variables:
+
+```{r}
+nb_lev <- sapply(variables, function(x) length(unique(data3[[x]])))
+```
+
+```{r}
+blanks <- map(nb_lev - 1, ~ rep("", .x))
+```
+
+
+```{r}
+add_blanks <- function(x) {
+  map2(x, blanks, ~ c(.x, .y))
+}
+```
+
+
+```{r}
+p_uni <- variables %>%
+  sapply(Pr_uni) %>% 
+  add_blanks() %>% 
+  unlist()
+```
+
+### Multivariate analyses
+
+```{r}
+m <- glm(habsi ~ ., binomial, data3)
+```
+
+```{r}
+or_multi <- m %>% 
+  (function(x) map(c(coef, confint), function(f) f(x))) %>% 
+  reduce(cbind) %>% 
+  magrittr::extract(-1, ) %>% 
+  exp() %>% 
+  round(3) %>% 
+  apply(1, put_in_shape) %>% 
+  split(rep(seq_along(nb_lev), nb_lev - 1)) %>% 
+  map(~ c("", .x)) %>% 
+  unlist()
+```
+
+```{r}
+p_multi <- m %>% 
+  car::Anova(test = "LR") %>% 
+  extract2("Pr(>Chisq)") %>% 
+  round(4) %>% 
+  add_blanks() %>% 
+  unlist()
+```
+
+### Putting together
+
+```{r}
+cbind(numbers, or_uni, p_uni, or_multi, p_multi) %>%
+  as.data.frame(stringsAsFactors = FALSE)
 ```
 
 
