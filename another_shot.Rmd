@@ -58,7 +58,7 @@ options(width = 253)
 Installing the required packages from CRAN:
 
 ```{r}
-required <- c("dplyr", "lubridate", "magrittr", "purrr", "readxl", "stringr", "survival", "tibble", "tidyr")
+required <- c("car", "dplyr", "lubridate", "magrittr", "purrr", "readxl", "stringr", "survival", "tibble", "tidyr")
 installed <- row.names(installed.packages())
 to_install <- setdiff(required, installed)
 if (length(to_install)) install.packages(to_install)
@@ -73,7 +73,7 @@ if (! "C306" %in% installed) {
 }
 ```
 
-Loading `magrittr` for interactive use:
+Loading packages for interactive use:
 
 ```{r, message = FALSE}
 library(magrittr)
@@ -88,18 +88,18 @@ library(survival)
 #library(huxtable)
 ```
 
-## 1. Putting the data in shape
+### Utilitary functions
 
-### Accessory functions
-
-This function transforms a "Yes/No" variable into a boolean one, dealing with
-missing values:
+Theh following functions converts a "Yes/No" variable into a boolean variable,
+dealing with missing values properly:
 
 ```{r}
 yesno2bool <- function(x) {
   na_if(x, "NA") == "Yes"
 }
 ```
+
+## 1. Reading and putting the data in shape
 
 ### Reading data
 The data are in this file:
@@ -138,7 +138,6 @@ The data about discharge:
 ```{r}
 data$FINISH %<>% 
   select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>%
-  mutate_at("IsAgree", yesno2bool) %>% 
   rename(ICUDateFINISH = ICUDate) %>% 
   distinct()
 ```
@@ -163,9 +162,6 @@ data$ADM %<>%
          COPD, CVA, Myo, SpOther, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
          Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
          Emergency, Source, Mild, Seve, ICUDate) %>%
-  mutate_at(vars(Myo, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme, Chro, Conn,
-                 Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV, Elective,
-                 Emergency, Mild, Seve), yesno2bool) %>% 
   rename(ICUDateADM = ICUDate) %>% 
   distinct()
 ```
@@ -197,7 +193,7 @@ Blood microbiology:
 data$MICBLD %<>% 
   select(PatientNo, HAIDate, OrganismsNo, Iden1, Iden2, OtherIden1, OtherIden2,
          IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2) %>% 
-  mutate_at(vars(IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2), yesno2bool) %>% 
+  mutate_at(vars(IsOxac1, IsESBL1, IsColistin1, IsOxac2, IsESBL2, IsColistin2), yesno2bool) %>%
   mutate_at(vars(OtherIden1, OtherIden2), correct_names) %>% 
   mutate_at(vars(Iden1, Iden2), recode, `1` = "Pseudomonas aeruginosa",
                                         `2` = "Klebsiella pneumoniae",
@@ -223,7 +219,7 @@ Daily monitoring:
 ```{r}
 data$DAILY1n2 %<>% 
   select(PatientNo, CVCCount, VSDate, Arterial, TempMax, TempMin) %>% 
-  mutate_at("Arterial", yesno2bool) %>% 
+  mutate_at(vars(Arterial), yesno2bool) %>% 
   distinct()
 ```
 
@@ -232,7 +228,8 @@ data$DAILY1n2 %<>%
 Patient information:
 
 ```{r}
-data$ENR %<>% select(PatientNo, Sex, Age, YOB, RandDate) %>% 
+data$ENR %<>%
+  select(PatientNo, Sex, Age, YOB, RandDate) %>% 
   distinct()
 ```
 
@@ -241,7 +238,6 @@ Ventilation:
 ```{r}
 data$AIR %<>% 
   select(PatientNo, IsTrach, TrachDate) %>% 
-  mutate_at("IsTrach", yesno2bool) %>% 
   distinct()
 ```
 
@@ -255,17 +251,19 @@ data$APAC %<>%
   distinct()
 ```
 
-Follow-ups:
+Follow-up at 28 days:
 
 ```{r}
-data$FU %<>% select(PatientNo, DeathDate28, Status28, Date28) %>% # We probably don't need this any more for now
+data$FU %<>%
+  select(PatientNo, DeathDate28, Status28, Date28) %>% # We probably don't need this any more for now
   distinct()
 ```
 
-and:
+Follow-up at 90 days:
 
 ```{r}
-data$FU_DAY90 %<>% select(PatientNo, DeathDate90, Status90, Date90) %>% # We probably don't need this any more for now
+data$FU_DAY90 %<>%
+  select(PatientNo, DeathDate90, Status90, Date90) %>% # We probably don't need this any more for now
   distinct()
 ```
 
@@ -422,6 +420,9 @@ data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
   mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI", "had_catheter", "had_arterial"),
             replace_na, FALSE) %>% 
   mutate_at(c("nb_cl_days", "nb_al_days", "nb_bsi"), replace_na, 0) %>% 
+  mutate_at(vars(IsAgree, Myo, DiaCo, DiaDa, Mode, CongI_III, Peri, Cere, Deme,
+                 Chro, Conn, Peptic, Hemi, ModeSeve, Meta, AIDS, AnyMa, CongIV,
+                 Elective, Emergency, Mild, Seve, IsTrach), yesno2bool) %>% 
   mutate(
 # at risk of hopital acquired blood stream infection:
          habsi_risk   = replace_na(HosDate - HospitalDate > 1, FALSE),
