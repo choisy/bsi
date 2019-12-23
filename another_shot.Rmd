@@ -1463,9 +1463,10 @@ lapply(1:7, function(x) c(out[x], inter[x])) %>%
   bind_rows()
 ```
 
-## 6B. Risk factors associated with BSI (Cox regression)
+## 6. Risk factors associated with BSI
 
-The following function transform a continuous variable into a categorical variable with equal amount of data in each category:
+The following function transform a continuous variable into a categorical variable
+with equal amount of data in each category:
 
 ```{r}
 makecat <- function(x, n = 3) {
@@ -1525,6 +1526,11 @@ numbers <- lapply(variables, n_and_percentage) %>%
 ### Univariate analyses
 
 ```{r}
+x <- "age"
+m <- coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4)
+```
+
+```{r}
 cox_coef <- function(x, digits = 4) {
   coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
     (function(x) map(c(coef, confint), function(f) f(x))) %>% 
@@ -1556,7 +1562,23 @@ calc_c_uni <- function(f) {
 $p$-values:
 
 ```{r}
-cox_p <- function(x, digits = 4) {
+cox_p1 <- function(x, digits = 3) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
+    summary() %>% 
+    use_series("coefficient") %>% 
+    magrittr::extract(, "Pr(>|z|)") %>% 
+    round(digits)
+}
+```
+
+Let's try it:
+
+```{r}
+cox_p1("Sex")
+```
+
+```{r}
+cox_p2 <- function(x, digits = 4) {
   coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
     anova() %>% 
     extract2("Pr(>|Chi|)") %>% 
@@ -1568,7 +1590,7 @@ cox_p <- function(x, digits = 4) {
 Let's try it:
 
 ```{r}
-cox_p("Sex")
+cox_p2("Sex")
 ```
 
 The number of levels per variable:
@@ -1602,7 +1624,7 @@ calc_p_uni <- function(f) {
 }
 ```
 
-### Multivariate model:
+### Multivariate model
 
 ```{r}
 m <- coxph(Surv(time2bsi, habsi) ~ ., data4)
@@ -1623,7 +1645,20 @@ calc_c_multi <- function(x) {
 ```
 
 ```{r}
-calc_p_multi <- function(x) {
+calc_p_multi1 <- function(x) {
+  x %>% 
+    summary() %>% 
+    use_series("coefficient") %>% 
+    magrittr::extract(, "Pr(>|z|)") %>% 
+    round(3) %>% 
+    split(rep(seq_along(nb_lev), nb_lev - 1)) %>% 
+    map(~ c("", .x)) %>% 
+    unlist()
+}
+```
+
+```{r}
+calc_p_multi2 <- function(x) {
   x %>% 
     car::Anova(test = "LR") %>% 
     extract2("Pr(>Chisq)") %>% 
@@ -1636,7 +1671,7 @@ calc_p_multi <- function(x) {
 All together:
 
 ```{r}
-cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_multi(m)) %>% 
+cbind(numbers, calc_c_uni(cox_coef), calc_c_uni(cox_p1), calc_p_uni(cox_p2), calc_c_multi(m), calc_p_multi1(m), calc_p_multi2(m)) %>% 
   as.data.frame(., row.names(.), stringsAsFactors = FALSE)
 ```
 
@@ -1687,7 +1722,7 @@ cox_coef("age")
 $p$-values:
 
 ```{r}
-cox_p <- function(x, digits = 4) {
+cox_p2 <- function(x, digits = 4) {
   coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %>% 
     anova() %>% 
     extract2("Pr(>|Chi|)") %>% 
@@ -1699,7 +1734,7 @@ cox_p <- function(x, digits = 4) {
 Let's try it:
 
 ```{r}
-cox_p("Sex")
+cox_p2("Sex")
 ```
 
 Multivariate model:
@@ -1711,7 +1746,7 @@ m <- coxph(Surv(DOD, as.numeric(death90)) ~ ., data5)
 All together:
 
 ```{r}
-cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_multi(m)) %>% 
+cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p2), calc_c_multi(m), calc_p_multi2(m)) %>% 
   as.data.frame(., row.names(.), stringsAsFactors = FALSE)
 ```
 
