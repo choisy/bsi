@@ -50,7 +50,7 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
 #options(width = 137)
-#options(width = 253)
+options(width = 300)
 ```
 
 ## 0. Packages
@@ -731,6 +731,8 @@ data2 %<>%
 
 ## 2. Derivation of Table 1 on demographics
 
+### Utilitary functions
+
 ```{r}
 groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI", "Tetanus", "death at ICU discharge", "death at hospital discharge")
 ```
@@ -774,6 +776,11 @@ mean_ci <- function(x) {
   m <- lm(x ~ 1)
   paste0(round(coef(m), 2), " (", paste(round(confint(m), 2), collapse = ", "), ")")
 }
+```
+
+Let's try it:
+
+```{r}
 mean_ci(data2$nb_cl_days)
 ```
 
@@ -810,37 +817,86 @@ ht_theme_markdown <- function(ht, header_rows = 1, header_cols = 1,
 }
 ```
 
+The following function generate Table 1 for a given group `x`:
+
 ```{r}
-data2 %>% 
-  mutate(habsi2 = ifelse(habsi, "HABSI", "non-HABSI")) %>%
-  assign("data2tmp", ., 1) %>% 
-  mutate_at(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"), as.integer) %>% 
-  sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy +
-                   CLBSI_risk + ALBSI_risk + apache + charlson + Tetanus +
-                   Pneumonia + sepsis + CNS + COPD + CVA + Myo + otherpath +
-                   dia_co + Mode + rand2icu + rand2hos + adm2icu + adm2hos +
-                   had_catheter + nb_cl_days + had_arterial + nb_al_days +
-                   habsi + deathICU + death28 + death90 ~ habsi2,
-                   data = ., pooledGroup = TRUE, digits = 0, flextable = FALSE) %>% 
-  `$`("table") %>% 
-  as.data.frame(stringsAsFactors = FALSE) %>% 
-  remove_boolean() %>% 
-  add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>% 
-  assign("tmp", ., 1) %>% 
-  tail(., nrow(.) - 2) %>% 
-  mutate(V1 = sub("-", "-   -", V1)) %>% 
-  `colnames<-`(tmp[2, ]) %>%
-  as.matrix %>% 
-  rbind(reduce(list(patient_day(habsi2, rand2icu, data2tmp),
-                    patient_day(habsi2, rand2hos, data2tmp),
-                    patient_day(habsi2, nb_cl_days, data2tmp),
-                    patient_day(habsi2, nb_al_days, data2tmp),
-                    day_per_patient(habsi2, nb_cl_days, data2tmp),
-                    day_per_patient(habsi2, nb_al_days, data2tmp)), rbind) %>%
-          as_tibble() %>% # to be able to use mutate()
-          mutate(V1 = c("rand2icu pd", "rand2hos pd", "nb_cl pd", "nb_al pd", "nb_cl pp", "nb_al pp")) %>% 
-          as.matrix()) %>% # to be able to use rbind() (because column names do not match)
-  as.data.frame(stringsAsFactors = FALSE) #%>% 
+make_table_1 <- function(x) {
+  new_x <- paste0(x, 2)
+  data2[["new_x"]] <- ifelse(data2[[x]], x, paste0("non-", x))
+  data2 %>% 
+    mutate_at(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"), as.integer) %>% 
+    sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy +
+                       CLBSI_risk + ALBSI_risk + apache + charlson + Tetanus +
+                       Pneumonia + sepsis + CNS + COPD + CVA + Myo + otherpath +
+                       dia_co + Mode + rand2icu + rand2hos + adm2icu + adm2hos +
+                       had_catheter + nb_cl_days + had_arterial + nb_al_days +
+                       habsi + deathICU + death28 + death90 ~ new_x,
+                     data = ., pooledGroup = TRUE, digits = 0, flextable = FALSE) %>% 
+    `$`("table") %>% 
+    as.data.frame(stringsAsFactors = FALSE) %>% 
+    remove_boolean() %>% 
+    add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>% 
+    assign("tmp", ., 1) %>% 
+    tail(., nrow(.) - 2) %>% 
+    mutate(V1 = sub("-", "-   -", V1)) %>% 
+    `colnames<-`(tmp[2, ]) %>%
+    as.matrix %>% 
+    rbind(reduce(list(patient_day(new_x, rand2icu, data2),
+                      patient_day(new_x, rand2hos, data2),
+                      patient_day(new_x, nb_cl_days, data2),
+                      patient_day(new_x, nb_al_days, data2),
+                      day_per_patient(new_x, nb_cl_days, data2),
+                      day_per_patient(new_x, nb_al_days, data2)), rbind) %>%
+            as_tibble() %>% # to be able to use mutate()
+            mutate(V1 = c("rand2icu pd", "rand2hos pd", "nb_cl pd", "nb_al pd", "nb_cl pp", "nb_al pp")) %>% 
+            as.matrix()) %>% # to be able to use rbind() (because column names do not match)
+    as.data.frame(stringsAsFactors = FALSE)
+}
+```
+
+Let's generate the tables for VARI:
+
+```{r}
+make_table_1("VARI")
+```
+
+Risk of HA BSI:
+
+```{r}
+make_table_1("habsi_risk")
+```
+
+HA BSI:
+
+```{r}
+make_table_1("habsi")
+```
+
+Risk of AL BSI:
+
+```{r}
+make_table_1("ALBSI_risk")
+```
+
+AL BSI:
+
+```{r}
+make_table_1("ALBSI")
+```
+
+Risk of CL BSI:
+
+```{r}
+make_table_1("CLBSI_risk")
+```
+
+CL BSI:
+
+```{r}
+make_table_1("CLBSI")
+```
+
+```{r include = FALSE}
 #  as_hux(add_rownames = FALSE, add_colnames = TRUE) %>% 
 #  insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), "")) %>%
 #  add_footnote("- n = number of patients included in that summary statistic.", border = 0) %>%
