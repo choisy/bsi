@@ -50,7 +50,7 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
 #options(width = 137)
-options(width = 253)
+#options(width = 253)
 ```
 
 ## 0. Packages
@@ -269,6 +269,8 @@ data$FU_DAY90 %<>%
 
 ### Microbiology variables (MICBLD)
 
+#### Adding episode variable
+
 The following function adds the episode variable:
 
 ```{r}
@@ -303,6 +305,8 @@ data$MICBLD %<>%
   ungroup() %>% 
   right_join(select(data$MICBLD, PatientNo, HAIDate), c("PatientNo", "HAIDate"))
 ```
+
+#### Other variables
 
 Patients with BSI, showing the date of the first BSI episode:
 
@@ -483,8 +487,7 @@ charlson <- data2 %>%
   mutate_at(vars(Hemi, ModeSeve, DiaDa, AnyMa), function(x) 2 * x) %>% 
   mutate_at(vars(Meta, AIDS), function(x) 6 * x) %>% 
   mutate(Mode         = 3 * Mode) %>% 
-  mutate(charlson     = select_if(., is.numeric) %>% rowSums(),
-         charlson_cat = cut(charlson, c(-Inf, 0, 2, 4, Inf)) %>% as.character()) # not sure whether this should be here or later (depends on how many time it's used)
+  mutate(charlson     = select_if(., is.numeric) %>% rowSums())
 ```
 
 Let's compare with Thinh:
@@ -497,7 +500,7 @@ setdiff(charlson_trinh$PatientNo, charlson$PatientNo)
 
 marc <- charlson %>% 
   arrange(PatientNo) %>% 
-  select(-PatientNo, -charlson_cat) %>% 
+  select(-PatientNo) %>%
   mutate_all(as.integer)
 
 trinh <- charlson_trinh %>% 
@@ -508,10 +511,16 @@ trinh <- charlson_trinh %>%
 any(! unlist(map2(marc, trinh, identical)))
 ```
 
+```{r}
+charlson2 <- charlson %>% 
+  mutate_at(vars(charlson), ~ cut(.x, c(-Inf, 0, 2, 4, Inf)) %>% as.character()) %>% 
+  select(PatientNo, charlson)
+```
+
 Let's add to `data2`:
 
 ```{r}
-data2 %<>% left_join(select(charlson, PatientNo, charlson_cat), "PatientNo")
+data2 %<>% left_join(charlson2, "PatientNo")
 ```
 
 ### Adding APACHE-II scores
@@ -712,32 +721,12 @@ data2 %<>% filter(! (IsCompleted > 1 & ! IsAgree),
 ```{r}
 data2 %<>% 
   select(PatientNo, hospital, Sex, age, otherhosp, NKQ, tracheostomy,
-         CLBSI_risk, ALBSI_risk, apache, charlson_cat, Tetanus, Pneumonia, sepsis,
+         CLBSI_risk, ALBSI_risk, apache, charlson, Tetanus, Pneumonia, sepsis,
          CNS, COPD, CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu,
          adm2hos, time2bsi, had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi,
          habsi_risk, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, DOD, death28, death90, deathICU,
          VARI, nb_bsi, nb_path_bsi1) %>% 
   mutate_if(is.numeric, as.integer)
-```
-
-### Looking at the dates
-
-`HospitalDate`: date of hospitalization
-
-`ICUDateADM`: date of ICU
-
-`ICUDateFINISH`: date of ICU discharge
-
-`HosDate`: date of hospital discharge
-
-```{r}
-data2 %>% 
-  select_if(is.Date)
-```
-
-```{r}
-#data2 %>% 
-#  select(PatientNo, OutCome, HospitalDate, ICUDateADM, ICUDateFINISH, HosDate , HosSame)
 ```
 
 ## 2. Derivation of Table 1 on demographics
@@ -827,7 +816,7 @@ data2 %>%
   assign("data2tmp", ., 1) %>% 
   mutate_at(c("rand2icu", "rand2hos", "adm2icu", "adm2hos"), as.integer) %>% 
   sstable.baseline(hospital + Sex + age + otherhosp + NKQ + tracheostomy +
-                   CLBSI_risk + ALBSI_risk + apache + charlson_cat + Tetanus +
+                   CLBSI_risk + ALBSI_risk + apache + charlson + Tetanus +
                    Pneumonia + sepsis + CNS + COPD + CVA + Myo + otherpath +
                    dia_co + Mode + rand2icu + rand2hos + adm2icu + adm2hos +
                    had_catheter + nb_cl_days + had_arterial + nb_al_days +
@@ -1272,7 +1261,7 @@ The data set to use here:
 
 ```{r}
 data3 <- data2 %>% 
-  select(habsi, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+  select(habsi, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
          dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu) %>% 
   drop_na() %>% 
   mutate_at("adm2icu", as.numeric) %>% 
@@ -1444,7 +1433,7 @@ The data:
 
 ```{r}
 data4 <- data2 %>% 
-  select(habsi, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+  select(habsi, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
          dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, time2bsi) %>% 
   drop_na() %>% 
   mutate_at("adm2icu", as.numeric) %>% 
@@ -1508,7 +1497,7 @@ The data:
 
 ```{r}
 data5 <- data2 %>% 
-  select(death90, Sex, age, hospital, apache, charlson_cat, sepsis, Tetanus, CNS,
+  select(death90, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
          dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, DOD) %>% 
   drop_na() %>% 
   mutate_at("adm2icu", as.numeric) %>% 
