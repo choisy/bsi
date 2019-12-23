@@ -49,8 +49,7 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
                       dev.args = list(pointsize = 11), fig.height = 3.5,
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
-#options(width = 137)
-#options(width = 300)
+options(width = 300)
 ```
 
 ## 0. Packages
@@ -1249,12 +1248,16 @@ legend("topright", legend = main_bugs, fill = colors[main_bugs], bty = "n", text
 
 ## 5. Derivation of BSI incidence rate
 
+The following function extracts estimate and confidence interval from the output
+of `prop.test()`:
+
 ```{r}
 extract_prop_test <- function(x) {
   unname(unlist(x[c("estimate", "conf.int")]))
 }
 ```
 
+The following function puts in good shape the estimate and confidence interval:
 
 ```{r}
 put_in_shape <- function(x) {
@@ -1262,7 +1265,7 @@ put_in_shape <- function(x) {
 }
 ```
 
-
+The following function uses the 2 preceding functions to calculate proportions:
 
 ```{r}
 calc_prop <- function(x, factor, digits) {
@@ -1276,8 +1279,9 @@ calc_prop <- function(x, factor, digits) {
 }
 ```
 
-
 ### HABSI rate
+
+The following function calculates HA BSI rates, with confidence interval:
 
 ```{r}
 habsi_rate <- function(x, factor = 1000, digits = 3) {
@@ -1297,6 +1301,9 @@ habsi_rate(data2)
 ```
 
 ### Proportion of patients with HABSI
+
+The following function calculates the proportion of patients with HA BSI, with
+confidence interval:
 
 ```{r}
 habsi_prop <- function(x, factor = 100, digits = 3) {
@@ -1319,6 +1326,8 @@ habsi_prop(data2)
 
 ### Number of central line days
 
+The following function calculates the number of CL days:
+
 ```{r}
 nb_cl_days_fct <- function(x) {
   sum(x$nb_cl_days, na.rm = TRUE) %>% 
@@ -1334,6 +1343,8 @@ nb_cl_days_fct(data2)
 ```
 
 ### Central line utilization ratio
+
+The following function calculates the CL utilization ratio:
 
 ```{r}
 cl_utilization_ratio <- function(x, factor = 1000, digits = 3) {
@@ -1354,6 +1365,8 @@ cl_utilization_ratio(data2)
 
 ### CLBSI rate
 
+The following function calculates the CL BSI rate:
+
 ```{r}
 clbsi_rate <- function(x, factor = 1000, digits = 3) {
   x %>% 
@@ -1373,6 +1386,8 @@ clbsi_rate(data2)
 
 #### Putting together
 
+The following function generates 1 row of the final table:
+
 ```{r}
 make1row <- function(x) {
     map(list(habsi_rate, habsi_prop, nb_cl_days_fct, cl_utilization_ratio, clbsi_rate),
@@ -1387,6 +1402,8 @@ Let's try it:
 ```{r}
 make1row(data2)
 ```
+
+The following is a wrapper around the previous one and applies it by group:
 
 ```{r}
 make1group <- function(x) {
@@ -1446,10 +1463,9 @@ lapply(1:7, function(x) c(out[x], inter[x])) %>%
   bind_rows()
 ```
 
-## 6A. Risk factors associated with BSI (logistic regression)
+## 6B. Risk factors associated with BSI (Cox regression)
 
-The following function transform a continuous variable into a categorical
-variable with equal amount of data in each category:
+The following function transform a continuous variable into a categorical variable with equal amount of data in each category:
 
 ```{r}
 makecat <- function(x, n = 3) {
@@ -1457,12 +1473,12 @@ makecat <- function(x, n = 3) {
 }
 ```
 
-The data set to use here:
+The data:
 
 ```{r}
-data3 <- data2 %>% 
+data4 <- data2 %>% 
   select(habsi, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
-         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu) %>% 
+         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, time2bsi) %>% 
   drop_na() %>% 
   mutate_at("adm2icu", as.numeric) %>% 
   mutate_at(vars(age, adm2icu, apache), makecat)
@@ -1478,7 +1494,7 @@ n_and_perc <- function(x, y) {
 
 ```{r}
 n_and_percentage <- function(var) {
-  a <- as.numeric(table(data3[[var]], data3$habsi))
+  a <- as.numeric(table(data4[[var]], data4$habsi))
   map2(a, round(100 * a / sum(a), 2), n_and_perc) %>% 
     unlist() %>% 
     matrix(ncol = 2)
@@ -1494,9 +1510,9 @@ n_and_percentage("age")
 All the variables we are interested in:
 
 ```{r}
-variables <- data3 %>% 
+variables <- data4 %>% 
   names() %>% 
-  setdiff("habsi")
+  setdiff(c("habsi", "time2bsi"))
 ```
 
 For all the variables:
@@ -1509,15 +1525,13 @@ numbers <- lapply(variables, n_and_percentage) %>%
 ### Univariate analyses
 
 ```{r}
-glm_coef <- function(x, digits = 4) {
-  m <- glm(data3$habsi ~ data3[[x]], binomial)
-  c <- coef(m)[-1]
-  ci <- confint(m)[-1, ]
-  if (! is.matrix(ci)) ci <- as.matrix(t(ci))
-  cbind(c, ci) %>% 
+cox_coef <- function(x, digits = 4) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
+    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
+    reduce(cbind) %>% 
     exp() %>% 
     round(digits) %>% 
-    apply(1, put_in_shape) %>%
+    apply(1, put_in_shape) %>% 
     as.matrix()
 }
 ```
@@ -1525,7 +1539,7 @@ glm_coef <- function(x, digits = 4) {
 Let's try it:
 
 ```{r}
-glm_coef("age")
+cox_coef("age")
 ```
 
 For all the variables:
@@ -1542,10 +1556,10 @@ calc_c_uni <- function(f) {
 $p$-values:
 
 ```{r}
-glm_p <- function(x, digits = 4) {
-  glm(data3$habsi ~ data3[[x]], binomial) %>% 
-    anova(test = "LRT") %>% 
-    extract2("Pr(>Chi)") %>% 
+cox_p <- function(x, digits = 4) {
+  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
+    anova() %>% 
+    extract2("Pr(>|Chi|)") %>% 
     magrittr::extract(2) %>% 
     round(digits)
 }
@@ -1554,13 +1568,13 @@ glm_p <- function(x, digits = 4) {
 Let's try it:
 
 ```{r}
-glm_p("Sex")
+cox_p("Sex")
 ```
 
 The number of levels per variable:
 
 ```{r}
-nb_lev <- sapply(variables, function(x) length(unique(data3[[x]])))
+nb_lev <- sapply(variables, function(x) length(unique(data4[[x]])))
 ```
 
 The blanks we need to add to the outputs:
@@ -1588,10 +1602,10 @@ calc_p_uni <- function(f) {
 }
 ```
 
-### Multivariate analyses
+### Multivariate model:
 
 ```{r}
-m <- glm(habsi ~ ., binomial, data3)
+m <- coxph(Surv(time2bsi, habsi) ~ ., data4)
 ```
 
 ```{r}
@@ -1599,7 +1613,6 @@ calc_c_multi <- function(x) {
   x %>% 
     (function(x) map(c(coef, confint), function(f) f(x))) %>% 
     reduce(cbind) %>% 
-    (function(y) {if("glm" %in% class(x)) return(magrittr::extract(y, -1, )); y}) %>% 
     exp() %>% 
     round(3) %>% 
     apply(1, put_in_shape) %>% 
@@ -1618,68 +1631,6 @@ calc_p_multi <- function(x) {
     add_blanks() %>% 
     unlist()
 }
-```
-
-### Putting together
-
-```{r}
-cbind(numbers, calc_c_uni(glm_coef), calc_p_uni(glm_p), calc_c_multi(m), calc_p_multi(m)) %>%
-  as.data.frame(., row.names(.), stringsAsFactors = FALSE)
-```
-
-## 6B. Risk factors associated with BSI (Cox regression)
-
-The data:
-
-```{r}
-data4 <- data2 %>% 
-  select(habsi, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
-         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, time2bsi) %>% 
-  drop_na() %>% 
-  mutate_at("adm2icu", as.numeric) %>% 
-  mutate_at(vars(age, adm2icu, apache), makecat)
-```
-
-```{r}
-cox_coef <- function(x, digits = 4) {
-  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
-    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
-    reduce(cbind) %>% 
-    exp() %>% 
-    round(digits) %>% 
-    apply(1, put_in_shape) %>% 
-    as.matrix()
-}
-```
-
-Let's try it:
-
-```{r}
-cox_coef("age")
-```
-
-$p$-values:
-
-```{r}
-cox_p <- function(x, digits = 4) {
-  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
-    anova() %>% 
-    extract2("Pr(>|Chi|)") %>% 
-    magrittr::extract(2) %>% 
-    round(digits)
-}
-```
-
-Let's try it:
-
-```{r}
-cox_p("Sex")
-```
-
-Multivariate model:
-
-```{r}
-m <- coxph(Surv(time2bsi, habsi) ~ ., data4)
 ```
 
 All together:
