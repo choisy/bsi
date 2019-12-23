@@ -50,7 +50,7 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
 #options(width = 137)
-options(width = 300)
+#options(width = 300)
 ```
 
 ## 0. Packages
@@ -958,6 +958,18 @@ list(data2 %>%
 
 ## 4. Derivation of Frequency of BSI aetiology
 
+```{r}
+colors <- setNames(c("#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3",
+                     "#fdb462","#b3de69","#fccde5", rep("#d9d9d9", 10)),
+                   c("Klebsiella pneumoniae", "Pseudomonas aeruginosa", "Acinetobacter baumanii",
+                     "Staphylococcus aureus", "Proteus mirabilis", "Enterococcus faecalis",
+                     "Stenotrophomonas maltophilia", "Staphylococcus epidermidis",
+                     "Escherichia coli", "Burkholderia seminalis", "Elizabethkingia meningoseptica",
+                     "Klebsiella aerogenes", "Klebsiella oxytoca", "Providencia stuartii",
+                     "Serratia marcescens", "Staphylococcus coagulase", "Staphylococcus haemolyticus",
+                     "Staphylococcus xylosus"))
+```
+
 ### All BSI episodes
 
 Total number of episodes:
@@ -1101,6 +1113,39 @@ As proportions:
 ```{r}
 path_freq_nonCLBSI / nb_non_clbsi
 ```
+
+### Pies of distributions
+
+All BSI episodes:
+
+```{r fig.width = 8}
+pie(path_freq[c(1:7, 9:8, 10:18)], cex = 2 / 3, col = colors[names(path_freq[c(1:7, 9:8, 10:18)])])
+```
+
+First BSI episodes:
+
+```{r fig.width = 8}
+pie(path_freq_1step, cex = 2 / 3, col = colors[names(path_freq_1step)])
+```
+
+CLBSI (first) episodes:
+
+```{r fig.width = 8}
+pie(path_freq_1stCLBSI[c(1:5, 8, 6:7, 9:13)], cex = 2 / 3, col = colors[names(path_freq_1stCLBSI[c(1:5, 8, 6:7, 9:13)])])
+```
+
+ALBSI (first) episodes:
+
+```{r fig.width = 8}
+pie(path_freq_1stALBSI[c(1:6, 11:12, 7:10, 13:14)], cex = 2 / 3, col = colors[names(path_freq_1stALBSI[c(1:6, 11:12, 7:10, 13:14)])])
+```
+
+Non-CLBSI (first) episodes:
+
+```{r fig.width = 8}
+pie(path_freq_nonCLBSI[c(1:6, 9, 7:8, 10)], cex = 2 / 3, col = colors[names(path_freq_nonCLBSI[c(1:6, 9, 7:8, 10)])])
+```
+
 
 ## 5. Derivation of BSI incidence rate
 
