@@ -1556,3 +1556,33 @@ cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_
 ```
 
 ## 8. Kaplan–Meier analysis
+
+```{r}
+data6 <- data2 %>% 
+  select(habsi, DOD, rand2hos, deathICU, death28, death90) %>% 
+  drop_na() %>% 
+  mutate(timeICU = as.integer(rand2hos),
+         time28  = min(28, DOD),
+         time90  = DOD) %>% 
+  select(-DOD, -rand2hos)
+```
+
+```{r}
+kmICU <- survfit(Surv(timeICU, deathICU) ~ 1, data = data6)
+plot(kmICU)
+```
+
+```{r}
+km28 <- survfit(Surv(time28, death28) ~ 1, data = data6)
+plot(km28)
+```
+
+```{r}
+km90 <- survfit(Surv(time90, death90) ~ 1, data = data6)
+plot(km90)
+```
+
+```{r}
+km90_2 <- survfit(Surv(time90, death90) ~ habsi, data = data6)
+plot(km90_2)
+```
