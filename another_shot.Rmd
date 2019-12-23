@@ -55,12 +55,22 @@ options(width = 253)
 
 ## 0. Packages
 
-Installing the required packages:
+Installing the required packages from CRAN:
 
 ```{r}
-required <- c("dplyr", "lubridate", "magrittr", "purrr", "readxl", "tibble", "tidyr")
-to_install <- setdiff(required, row.names(installed.packages()))
+required <- c("dplyr", "lubridate", "magrittr", "purrr", "readxl", "stringr", "survival", "tibble", "tidyr")
+installed <- row.names(installed.packages())
+to_install <- setdiff(required, installed)
 if (length(to_install)) install.packages(to_install)
+```
+
+Plus `C306` from GitHub:
+
+```{r}
+if (! "C306" %in% installed) {
+  if (! "remotes" %in% installed) install.packages("remotes")
+  remotes::install_github("lampk/C306")
+}
 ```
 
 Loading `magrittr` for interactive use:
@@ -82,6 +92,9 @@ library(survival)
 
 ### Accessory functions
 
+This function transforms a "Yes/No" variable into a boolean one, dealing with
+missing values:
+
 ```{r}
 yesno2bool <- function(x) {
   na_if(x, "NA") == "Yes"
@@ -95,16 +108,10 @@ The data are in this file:
 data_file <- "19-8-2019-CTU16HN_Data.xls.xlsx"
 ```
 
-The list of sheets that we are interested in:
+The sheets that we are interested in are the following ones:
 
 ```{r}
 sheets <- c("ADM", "AIR", "APAC", "DAILY1n2", "ENR", "FINISH", "FU", "FU_DAY90", "MICBLD")
-```
-
-Non-eligible patients:
-
-```{r}
-non_eligible_IDs <- c("020-007", "020-012", "020-063", "003-089", "003-053", "003-110")
 ```
 
 Reading all the sheets of this file and transforming the dates:
@@ -124,6 +131,10 @@ data_all <- sheets %>%
   setNames(sheets)
 ```
 
+#### Tyding data
+
+The data about discharge:
+
 ```{r}
 data$FINISH %<>% 
   select(PatientNo, IsCompleted, IsAgree, HosDate, ICUDate, OutCome, HosSame) %>%
@@ -131,6 +142,8 @@ data$FINISH %<>%
   rename(ICUDateFINISH = ICUDate) %>% 
   distinct()
 ```
+
+Where:
 
 `IsComplete == 1`: completed until discharge or death
 
@@ -142,7 +155,7 @@ data$FINISH %<>%
 
 `OutCome`: death or not
 
-Admission information:
+The data about admission:
 
 ```{r}
 data$ADM %<>% 
@@ -681,6 +694,12 @@ data2 <- readRDS("death_day.full.rds") %>%
 Note that there are 6 missing values in `DOD`.
 
 ### Filtering the data set
+
+Non-eligible patients:
+
+```{r}
+non_eligible_IDs <- c("020-007", "020-012", "020-063", "003-089", "003-053", "003-110")
+```
 
 ```{r}
 data2 %<>% filter(! (IsCompleted > 1 & ! IsAgree),
@@ -1560,11 +1579,11 @@ cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p), calc_c_multi(m), calc_p_
 ```{r}
 data6 <- data2 %>% 
   select(habsi, DOD, rand2hos, deathICU, death28, death90) %>% 
-  drop_na() %>% 
   mutate(timeICU = as.integer(rand2hos),
-         time28  = min(28, DOD),
+         time28  = ifelse(DOD < 29, DOD, 28),
          time90  = DOD) %>% 
   select(-DOD, -rand2hos)
+data6
 ```
 
 ```{r}
@@ -1583,6 +1602,23 @@ plot(km90)
 ```
 
 ```{r}
-km90_2 <- survfit(Surv(time90, death90) ~ habsi, data = data6)
-plot(km90_2)
+kmICU_2 <- survfit(Surv(timeICU, deathICU) ~ habsi, data = data6)
+plot(kmICU_2, col = 3:2)
 ```
+
+```{r}
+km28_2 <- survfit(Surv(time28, death28) ~ habsi, data = data6)
+plot(km28_2, col = 3:2)
+```
+
+```{r}
+km90_2 <- survfit(Surv(time90, death90) ~ habsi, data = data6)
+plot(km90_2, col = 3:2)
+```
+
+```{r}
+with(data6, table(habsi, deathICU))
+with(data6, table(habsi, death28))
+with(data6, table(habsi, death90))
+```
+
