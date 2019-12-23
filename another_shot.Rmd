@@ -958,18 +958,6 @@ list(data2 %>%
 
 ## 4. Derivation of Frequency of BSI aetiology
 
-```{r}
-colors <- setNames(c("#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3",
-                     "#fdb462","#b3de69","#fccde5", rep("#d9d9d9", 10)),
-                   c("Klebsiella pneumoniae", "Pseudomonas aeruginosa", "Acinetobacter baumanii",
-                     "Staphylococcus aureus", "Proteus mirabilis", "Enterococcus faecalis",
-                     "Stenotrophomonas maltophilia", "Staphylococcus epidermidis",
-                     "Escherichia coli", "Burkholderia seminalis", "Elizabethkingia meningoseptica",
-                     "Klebsiella aerogenes", "Klebsiella oxytoca", "Providencia stuartii",
-                     "Serratia marcescens", "Staphylococcus coagulase", "Staphylococcus haemolyticus",
-                     "Staphylococcus xylosus"))
-```
-
 ### All BSI episodes
 
 Total number of episodes:
@@ -1116,36 +1104,148 @@ path_freq_nonCLBSI / nb_non_clbsi
 
 ### Pies of distributions
 
+The colors of the bugs:
+
+```{r}
+colors <- setNames(c("#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3",
+                     "#fdb462","#b3de69","#fccde5", rep("#d9d9d9", 10)),
+                   c("Klebsiella pneumoniae", "Pseudomonas aeruginosa", "Acinetobacter baumanii",
+                     "Staphylococcus aureus", "Proteus mirabilis", "Enterococcus faecalis",
+                     "Stenotrophomonas maltophilia", "Staphylococcus epidermidis",
+                     "Escherichia coli", "Burkholderia seminalis", "Elizabethkingia meningoseptica",
+                     "Klebsiella aerogenes", "Klebsiella oxytoca", "Providencia stuartii",
+                     "Serratia marcescens", "Staphylococcus coagulase", "Staphylococcus haemolyticus",
+                     "Staphylococcus xylosus"))
+```
+
+The following functions allows to write in italic:
+
+```{r}
+make_italic <- function(x) {
+  as.expression(lapply(x, function(y) bquote(italic(.(y)))))
+}
+```
+
+Tuning the `pie()` function:
+
+```{r}
+pie2 <- function(x) {
+  pie(x, cex = 2 / 3, make_italic(names(x)), col = colors[names(x)])
+}
+```
+
 All BSI episodes:
 
 ```{r fig.width = 8}
-pie(path_freq[c(1:7, 9:8, 10:18)], cex = 2 / 3, col = colors[names(path_freq[c(1:7, 9:8, 10:18)])])
+pie2(path_freq[c(1:7, 9:8, 10:18)])
 ```
 
 First BSI episodes:
 
 ```{r fig.width = 8}
-pie(path_freq_1step, cex = 2 / 3, col = colors[names(path_freq_1step)])
+pie2(path_freq_1step)
 ```
 
 CLBSI (first) episodes:
 
 ```{r fig.width = 8}
-pie(path_freq_1stCLBSI[c(1:5, 8, 6:7, 9:13)], cex = 2 / 3, col = colors[names(path_freq_1stCLBSI[c(1:5, 8, 6:7, 9:13)])])
+pie2(path_freq_1stCLBSI[c(1:5, 8, 6:7, 9:13)])
 ```
 
 ALBSI (first) episodes:
 
 ```{r fig.width = 8}
-pie(path_freq_1stALBSI[c(1:6, 11:12, 7:10, 13:14)], cex = 2 / 3, col = colors[names(path_freq_1stALBSI[c(1:6, 11:12, 7:10, 13:14)])])
+pie2(path_freq_1stALBSI[c(1:6, 11:12, 7:10, 13:14)])
 ```
 
 Non-CLBSI (first) episodes:
 
 ```{r fig.width = 8}
-pie(path_freq_nonCLBSI[c(1:6, 9, 7:8, 10)], cex = 2 / 3, col = colors[names(path_freq_nonCLBSI[c(1:6, 9, 7:8, 10)])])
+pie2(path_freq_nonCLBSI[c(1:6, 9, 7:8, 10)])
 ```
 
+### Comparing distributions
+
+Let's now compare the distribution of the main bugs which are the following:
+
+```{r}
+main_bugs <- c("Klebsiella pneumoniae",  "Pseudomonas aeruginosa",
+               "Acinetobacter baumanii", "Staphylococcus aureus",
+               "Enterococcus faecalis")
+```
+
+The following function tests the difference in the prevalence of one bug `x` in
+the 5 different set-ups considered above (all BSI, first BSI episodes, etc...):
+
+```{r}
+fisher_test <- function(x) {
+  fisher.test(matrix(
+    c(path_freq[x],
+      path_freq_1step[x],
+      path_freq_1stCLBSI[x],
+      path_freq_1stALBSI[x],
+      path_freq_nonCLBSI[x],
+      nb_episodes,
+      nb_1st_episodes,
+      nb_clbsi,
+      nb_albsi,
+      nb_non_clbsi), 2, byrow = TRUE))
+}
+```
+
+Let's apply it to all the main bugs:
+
+```{r}
+map(main_bugs, fisher_test)
+```
+
+The following function computes the proportion of a bug `x`, with 95%-confidence
+interval:
+
+```{r}
+calc_prop <- function(x) {
+  list(unlist(prop.test(path_freq[x], nb_episodes)[c("estimate", "conf.int")]),
+       unlist(prop.test(path_freq_1step[x], nb_1st_episodes)[c("estimate", "conf.int")]),
+       unlist(prop.test(path_freq_1stCLBSI[x], nb_clbsi)[c("estimate", "conf.int")]),
+       unlist(prop.test(path_freq_1stALBSI[x], nb_albsi)[c("estimate", "conf.int")]),
+       unlist(prop.test(path_freq_nonCLBSI[x], nb_non_clbsi)[c("estimate", "conf.int")])) %>% 
+    reduce(rbind) %>% 
+    as.data.frame()
+}
+```
+
+Let's apply it to all the main bugs:
+
+```{r}
+prop_est <- map(main_bugs, calc_prop)
+```
+
+The following function puts together estimates (`x = 1`), lower bound (`x = 2`),
+or upper bound (`x = 3`) of an object of the `prop_est` object:
+
+```{r}
+extract3 <- function(x) {
+  prop_est %>%
+    map(extract2, x) %>% 
+    reduce(cbind)
+}
+```
+
+Let's apply it for estimate, lower and upper bounds:
+
+```{r}
+prop_est2 <- map(1:3, extract3)
+```
+
+Let's draw the barplot:
+
+```{r fig.width = 6, fig.height = 4}
+barplot(prop_est2[[1]], beside = TRUE, col = colors[main_bugs], ylim = c(0, .6),
+        names.arg = c("all BSI", "first BSI", "CLBSI", "ALBSI", "non-CLBSI"))
+xs <- (2:30 - .5)[-seq(6, by = 6, le = 4)]
+arrows(xs, as.numeric(prop_est2[[2]]), xs, as.numeric(prop_est2[[3]]), .05, 90, 3)
+legend("topright", legend = main_bugs, fill = colors[main_bugs], bty = "n", text.font = 3)
+```
 
 ## 5. Derivation of BSI incidence rate
 
@@ -1154,7 +1254,6 @@ extract_prop_test <- function(x) {
   unname(unlist(x[c("estimate", "conf.int")]))
 }
 ```
-
 
 
 ```{r}
