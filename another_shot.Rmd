@@ -1465,8 +1465,10 @@ lapply(1:7, function(x) c(out[x], inter[x])) %>%
 
 ## 6. Risk factors associated with BSI
 
-The following function transform a continuous variable into a categorical variable
-with equal amount of data in each category:
+### Utilitary functions
+
+The following function transforms a continuous variable into a categorical
+variable with equal amount of data in each category:
 
 ```{r}
 makecat <- function(x, n = 3) {
@@ -1474,18 +1476,7 @@ makecat <- function(x, n = 3) {
 }
 ```
 
-The data:
-
-```{r}
-data4 <- data2 %>% 
-  select(habsi, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
-         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, time2bsi) %>% 
-  drop_na() %>% 
-  mutate_at("adm2icu", as.numeric) %>% 
-  mutate_at(vars(age, adm2icu, apache), makecat)
-```
-
-### Numbers of BSI and non-BSI
+Prints nice outputs for percentages:
 
 ```{r}
 n_and_perc <- function(x, y) {
@@ -1493,261 +1484,193 @@ n_and_perc <- function(x, y) {
 }
 ```
 
-```{r}
-n_and_percentage <- function(var) {
-  a <- as.numeric(table(data4[[var]], data4$habsi))
-  map2(a, round(100 * a / sum(a), 2), n_and_perc) %>% 
-    unlist() %>% 
-    matrix(ncol = 2)
-}
-```
-
-Let's try it:
+The following function adds a single blank to each element of a list:
 
 ```{r}
-n_and_percentage("age")
-```
-
-All the variables we are interested in:
-
-```{r}
-variables <- data4 %>% 
-  names() %>% 
-  setdiff(c("habsi", "time2bsi"))
-```
-
-For all the variables:
-
-```{r}
-numbers <- lapply(variables, n_and_percentage) %>% 
-  reduce(rbind)
-```
-
-### Univariate analyses
-
-```{r}
-x <- "age"
-m <- coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4)
-```
-
-```{r}
-cox_coef <- function(x, digits = 4) {
-  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
-    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
-    reduce(cbind) %>% 
-    exp() %>% 
-    round(digits) %>% 
-    apply(1, put_in_shape) %>% 
-    as.matrix()
-}
-```
-
-Let's try it:
-
-```{r}
-cox_coef("age")
-```
-
-For all the variables:
-
-```{r}
-calc_c_uni <- function(f) {
-  variables %>% 
-    lapply(f) %>% 
-    map(~ c("", .x)) %>% 
-    unlist()
-}
-```
-
-$p$-values:
-
-```{r}
-cox_p1 <- function(x, digits = 3) {
-  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
-    summary() %>% 
-    use_series("coefficient") %>% 
-    magrittr::extract(, "Pr(>|z|)") %>% 
-    round(digits)
-}
-```
-
-Let's try it:
-
-```{r}
-cox_p1("Sex")
-```
-
-```{r}
-cox_p2 <- function(x, digits = 4) {
-  coxph(Surv(time2bsi, habsi) ~ data4[[x]], data4) %>% 
-    anova() %>% 
-    extract2("Pr(>|Chi|)") %>% 
-    magrittr::extract(2) %>% 
-    round(digits)
-}
-```
-
-Let's try it:
-
-```{r}
-cox_p2("Sex")
-```
-
-The number of levels per variable:
-
-```{r}
-nb_lev <- sapply(variables, function(x) length(unique(data4[[x]])))
-```
-
-The blanks we need to add to the outputs:
-
-```{r}
-blanks <- map(nb_lev - 1, ~ rep("", .x))
-```
-
-The function that adds the blanks:
-
-```{r}
-add_blanks <- function(x) {
-  map2(x, blanks, ~ c(.x, .y))
-}
-```
-
-For all the variables:
-
-```{r}
-calc_p_uni <- function(f) {
-  variables %>% 
-    sapply(f) %>% 
-    add_blanks() %>% 
-    unlist()
-}
-```
-
-### Multivariate model
-
-```{r}
-m <- coxph(Surv(time2bsi, habsi) ~ ., data4)
-```
-
-```{r}
-calc_c_multi <- function(x) {
+add_single_blanks <- function(x) {
   x %>% 
-    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
-    reduce(cbind) %>% 
-    exp() %>% 
-    round(3) %>% 
-    apply(1, put_in_shape) %>% 
-    split(rep(seq_along(nb_lev), nb_lev - 1)) %>% 
     map(~ c("", .x)) %>% 
     unlist()
 }
+
 ```
 
+The following function extract the $p$-values of each level of each variable of
+a Cox regression model `x`:
+
 ```{r}
-calc_p_multi1 <- function(x) {
+extract_levels_pvalues <- function(x) {
   x %>% 
     summary() %>% 
     use_series("coefficient") %>% 
-    magrittr::extract(, "Pr(>|z|)") %>% 
-    round(3) %>% 
-    split(rep(seq_along(nb_lev), nb_lev - 1)) %>% 
-    map(~ c("", .x)) %>% 
-    unlist()
+    magrittr::extract(, "Pr(>|z|)")
 }
 ```
 
+### Risk factors
+
+The following function computes the risk factors table:
+
 ```{r}
-calc_p_multi2 <- function(x) {
-  x %>% 
-    car::Anova(test = "LR") %>% 
-    extract2("Pr(>Chisq)") %>% 
-    round(4) %>% 
-    add_blanks() %>% 
+risk_factors <- function(event, time, digit1 = 2, digits = 3) {
+# Making the data:
+  data <- data2 %>% 
+    select({{event}}, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
+           dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, {{time}}) %>% 
+    drop_na() %>% 
+    mutate_at("adm2icu", as.numeric) %>% 
+    mutate_at(vars(age, adm2icu, apache), makecat)
+
+# Generating variables sets:
+  event_time <- data %>%
+    select({{event}}, {{time}}) %>%
+    names()
+  event_var <- event_time[1]
+  time_var <- event_time[2]
+  variables <- setdiff(names(data), event_time)
+
+# The following function gives numbers and percentages:
+  n_and_percentage <- function(var) {
+    x <- as.numeric(table(data[[var]], data[[event_var]]))
+    map2(x, round(100 * x / sum(x), digit1), n_and_perc) %>%
+      unlist() %>%
+      matrix(ncol = 2)
+  }
+
+# The numbers and percentages for all the variables:
+  numbers <- lapply(variables, n_and_percentage) %>%
+    reduce(rbind)
+
+# The following function uses a function f on all the variables and adds space
+# between each variable:
+  calc_uni_single <- function(f) {
+    variables %>% 
+      lapply(f) %>% 
+      add_single_blanks()
+  }  
+
+# The following function extracts the coefficients of a Cox regression and puts
+# them into shape:
+  cox_coef <- function(x) {
+    y <- Surv(data[[time_var]], data[[event_var]])
+    coxph(y ~ data[[x]]) %>%
+      (function(x) map(c(coef, confint), function(f) f(x))) %>%
+      reduce(cbind) %>%
+      exp() %>%
+      round(digits) %>%
+      apply(1, put_in_shape) %>%
+      as.matrix()
+  }
+
+# The following function runs a Cox regression and extracts the p-values for
+# each level of each variable:
+  cox_p1 <- function(x) {
+    y <- Surv(data[[time_var]], data[[event_var]])
+    coxph(y ~ data[[x]]) %>%
+      extract_levels_pvalues() %>%
+      round(digits)
+  }
+
+# The following function runs a Cox regression and extracts the p-values for
+# each variable:
+  cox_p2 <- function(x) {
+    y <- Surv(data[[time_var]], data[[event_var]])
+    coxph(y ~ data[[x]]) %>%
+      anova() %>%
+      extract2("Pr(>|Chi|)") %>%
+      magrittr::extract(2) %>%
+      round(digits)
+  }
+
+# The number of levels per variable:
+  nb_lev <- sapply(variables, function(x) length(unique(data[[x]])))
+
+# The function that adds the blanks:
+  add_multiple_blanks <- function(x) {
+    blanks <- map(nb_lev - 1, ~ rep("", .x))
+    map2(x, blanks, ~ c(.x, .y))
+  }
+  
+# The p-values of each variable from univariate models:
+  p_uni2 <- variables %>%
+    sapply(cox_p2) %>%
+     add_multiple_blanks() %>%
+     unlist()
+
+# The multivariate model:
+  m <- coxph(Surv(data[[time_var]], data[[event_var]]) ~ ., data[, variables])
+
+# The following function splits a data frame by variables, according to the
+# number of levels in each variable:
+  split_by_variable <- function(x) {
+    split(x, rep(seq_along(nb_lev), nb_lev - 1))
+  }
+
+# Coefficients of the multivariate model:
+  c_multi <- m %>%
+    (function(x) map(c(coef, confint), function(f) f(x))) %>%
+    reduce(cbind) %>%
+    exp() %>%
+    round(digits) %>%
+    apply(1, put_in_shape) %>%
+    split_by_variable() %>%
+    map(~ c("", .x)) %>%
     unlist()
+
+# p-values of each level of each variable of the multivariate model:
+  p_multi1 <- m %>%
+    extract_levels_pvalues() %>%
+    round(digits) %>%
+    split_by_variable() %>%
+    add_single_blanks()
+
+# p-values of each variable of the multivariate model, corrected for confoundings:
+  p_multi2 <- m %>%
+    car::Anova(test = "LR") %>%
+    extract2("Pr(>Chisq)") %>%
+    round(digits) %>%
+    add_multiple_blanks() %>%
+    unlist()
+
+# Levels:
+  levels <- m %>% 
+    summary() %>% 
+    use_series("coefficient") %>% 
+    rownames() %>%
+    split_by_variable() %>%
+    add_single_blanks()
+
+  levels <- data[, variables] %>% 
+    mutate_all(as.factor) %>%
+    lapply(levels) %>%
+    unlist()
+  
+  vars <- variables %>%
+    add_multiple_blanks %>%
+    unlist()
+  
+# Putting together:
+  cbind(vars, levels, numbers, calc_uni_single(cox_coef),
+        calc_uni_single(cox_p1), p_uni2, c_multi, p_multi1, p_multi2) %>%
+    as.data.frame(stringsAsFactors = FALSE) %>% 
+    remove_rownames() %>% 
+    setNames(c("variables", "levels", "non event", "event", "rate ratio uni",
+               "p level 1", "p variable 1", "rate ratio multi", "p level 2", "p variable 2 "))
 }
 ```
 
-All together:
+Let's run it:
 
 ```{r}
-cbind(numbers, calc_c_uni(cox_coef), calc_c_uni(cox_p1), calc_p_uni(cox_p2), calc_c_multi(m), calc_p_multi1(m), calc_p_multi2(m)) %>% 
-  as.data.frame(., row.names(.), stringsAsFactors = FALSE)
+risk_factors(habsi, time2bsi)
 ```
 
 ## 7. Risk factors associated with mortality
 
-The same as above for mortality, with only the Cox regression:
-
-The data:
+Same function as before, with different event:
 
 ```{r}
-data5 <- data2 %>% 
-  select(death90, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
-         dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, DOD) %>% 
-  drop_na() %>% 
-  mutate_at("adm2icu", as.numeric) %>% 
-  mutate_at(vars(age, adm2icu, apache), makecat)
-```
-
-```{r}
-variables <- data5 %>% 
-  names() %>% 
-  setdiff(c("death90", "DOD"))
-```
-
-```{r}
-numbers <- lapply(variables, n_and_percentage) %>% 
-  reduce(rbind)
-```
-
-```{r}
-cox_coef <- function(x, digits = 4) {
-  coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %>% 
-    (function(x) map(c(coef, confint), function(f) f(x))) %>% 
-    reduce(cbind) %>% 
-    exp() %>% 
-    round(digits) %>% 
-    apply(1, put_in_shape) %>% 
-    as.matrix()
-}
-```
-
-Let's try it:
-
-```{r}
-cox_coef("age")
-```
-
-$p$-values:
-
-```{r}
-cox_p2 <- function(x, digits = 4) {
-  coxph(Surv(data5$DOD, data5$death90) ~ data5[[x]], data5) %>% 
-    anova() %>% 
-    extract2("Pr(>|Chi|)") %>% 
-    magrittr::extract(2) %>% 
-    round(digits)
-}
-```
-
-Let's try it:
-
-```{r}
-cox_p2("Sex")
-```
-
-Multivariate model:
-
-```{r}
-m <- coxph(Surv(DOD, as.numeric(death90)) ~ ., data5)
-```
-
-All together:
-
-```{r}
-cbind(numbers, calc_c_uni(cox_coef), calc_p_uni(cox_p2), calc_c_multi(m), calc_p_multi2(m)) %>% 
-  as.data.frame(., row.names(.), stringsAsFactors = FALSE)
+risk_factors(death90, DOD)
 ```
 
 ## 8. Kaplan–Meier analysis
