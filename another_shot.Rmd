@@ -1113,8 +1113,8 @@ Frequencies and proportions of pathogens for all the non-CLBSI episodes:
 The colors of the bugs:
 
 ```{r}
-colors <- setNames(c("#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3",
-                     "#fdb462","#b3de69","#fccde5", rep("#d9d9d9", 10)),
+colors <- setNames(c("#fb8072", "#fdb462", "#80b1d3", "#b3de69", "#8dd3c7",
+                     "#ffffb3", "#bebada", "#fccde5", rep("#d9d9d9", 10)),
                    c("Klebsiella pneumoniae", "Pseudomonas aeruginosa", "Acinetobacter baumanii",
                      "Staphylococcus aureus", "Proteus mirabilis", "Enterococcus faecalis",
                      "Stenotrophomonas maltophilia", "Staphylococcus epidermidis",
