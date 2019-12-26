@@ -1763,40 +1763,68 @@ with(data3, table(habsi, death28))
 with(data3, table(habsi, death90))
 ```
 
-### A function to plot events occurences
+### Utilitary functions
+
+This function splits a vector `x` according to the indexes given by the vector
+`pos`:
 
 ```{r}
-plotevent <- function(a, ylim = 0:1, col_line = "black", col_area = "grey", add = FALSE) {
-  splitat <- function(x, pos) split(x, cumsum(seq_along(x) %in% pos))
-  
-  time <- a$time
-  lwr <- a$lower
-  upr <- a$upper
-  sel <- sort(c(which(! near(diff(lwr), 0)), which(! near(diff(upr), 0))) + 1)
+splitat <- function(x, pos) {
+  split(x, cumsum(seq_along(x) %in% pos))
+}
+```
 
-  tmp <- splitat(lwr, sel)
-  lwr2 <- tmp[-length(tmp)] %>%
-    map(~ c(.x, last(.x))) %>% 
-    c(last(tmp)) %>% 
-    unlist()
+This functions transform a vector of $x$ coordinates so that it can easily be
+plotted in staircase style:
 
-  tmp <- splitat(upr, sel)
-  upr2 <- tmp[-length(tmp)] %>%
-    map(~ c(.x, last(.x))) %>% 
-    c(last(tmp)) %>% 
-    unlist()
-  
-  tmp <- splitat(time, sel)
+```{r}
+transform_x <- function(x, at) {
+  tmp <- splitat(x, at)
   time2 <- tmp[-1] %>%
     map(~ c(first(.x), .x)) %>% 
     c(first(tmp), .) %>% 
     unlist()
+
+}
+```
+
+This functions transform a vector of $y$ coordinates so that it can easily be
+plotted in staircase style:
+
+```{r}
+transform_y <- function(x, at) {
+  tmp <- splitat(x, at)
+  tmp[-length(tmp)] %>%
+    map(~ c(.x, last(.x))) %>% 
+    c(last(tmp)) %>% 
+    unlist()
+} 
+```
+
+### A function to plot events occurences
+
+```{r}
+plotevent <- function(a, ylim = 0:1, col_line = "black", col_area = "grey", add = FALSE) {
   
-  if (! add)
-    plot(a$time, 1 - a$surv, type = "s", xlab = "time (days)", ylab = "proportion dead", ylim = ylim)
+  snames <- c("time", "surv", "lower", "upper")
   
-  polygon(c(time2, rev(time2)), 1 - c(lwr2, rev(upr2)), col = col_area, border = NA)
-  lines(a$time, 1 - a$surv, type = "s", col = col_line)
+  tmp <- a %>%
+    unclass() %>%
+    magrittr::extract(snames) %>% 
+    map2(c(0, 1, 1, 1), ~ c(.y, .x))
+  
+  sel <- with(tmp, sort(c(which(! near(diff(lower), 0)), which(! near(diff(upper), 0))) + 1))
+  
+  c(transform_x, transform_y, transform_y, transform_y) %>% 
+    map2(tmp, ~ .x(.y, sel)) %>% 
+    setNames(snames) %>%
+    with({
+      if (! add)
+        plot(time, 1 - surv, xlab = "time (days)", ylab = "proportion dead", ylim = ylim, type = "n")
+
+      polygon(c(time, rev(time)), 1 - c(lower, rev(upper)), col = col_area, border = NA)
+      lines(time, 1 - surv, col = col_line)
+    })
 }
 ```
 
@@ -1815,24 +1843,39 @@ legend("topright", legend = c("at ICU discharge", "at day 90", "at day 28"),
 
 ### Events occurences as functions of time and BSI status
 
+Graph parameters:
+
+```{r}
+colors <- c("#e41a1c", "#377eb8")
+adjcol <- adjustcolor(colors, .5)
+add_legend <- function() {
+  legend("topleft", legend = c("HA BSI", "non HA BSI"),
+         fill = adjcol, col = colors, lty = 1, bty = "n", border = NA)
+}
+```
+
 Death at ICU:
 
 ```{r}
-a <- survfit(Surv(timeICU, deathICU) ~ habsi, data = data3)
+plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3, habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3, ! habsi)), ylim, colors[2], adjcol[2], add = TRUE)
+add_legend()
 ```
 
 Death at day 28:
 
 ```{r}
-km28_2 <- survfit(Surv(time28, death28) ~ habsi, data = data3)
-plot(km28_2, col = 3:2)
+plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3, habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3, ! habsi)), ylim, colors[2], adjcol[2], add = TRUE)
+add_legend()
 ```
 
 Death at day 90:
 
 ```{r}
-km90_2 <- survfit(Surv(time90, death90) ~ habsi, data = data3)
-plot(km90_2, col = 3:2)
+plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, ! habsi)), ylim, colors[2], adjcol[2], add = TRUE)
+add_legend()
 ```
 
 ### Events occurences as functions of time and type of BSI status
