@@ -1322,7 +1322,8 @@ calc_prop <- function(x, factor, digits) {
     extract_prop_test() %>% 
     multiply_by(factor) %>% 
     round(digits) %>% 
-    put_in_shape()
+    put_in_shape() %>% 
+    paste0(" (", paste(x, collapse = " / "), ")")
 }
 ```
 
@@ -1359,6 +1360,8 @@ habsi_prop <- function(x, factor = 100, digits = 3) {
     drop_na() %>% 
     group_by(habsi) %>% # habsi is boolean
     tally() %>% 
+    add_column(total = sum(.$n)) %>% 
+    mutate(n = ifelse(habsi, n, total)) %>% 
     pull(n) %>% 
     rev() %>% 
     calc_prop(factor, digits)
