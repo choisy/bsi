@@ -49,7 +49,8 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
                       dev.args = list(pointsize = 11), fig.height = 3.5,
                       fig.width = 4.24725, fig.retina = 2, fig.align = "center")
 
-options(width = 260)
+# options(width = 260) # console
+options(width = 166) # HTML
 ```
 
 ## 0. Packages
@@ -94,10 +95,21 @@ Theh following functions converts a "Yes/No" variable into a boolean variable,
 dealing with missing values properly:
 
 ```{r}
-yesno2bool <- function(x) {
-  na_if(x, "NA") == "Yes"
-}
+yesno2bool <- function(x) na_if(x, "NA") == "Yes"
 ```
+
+A safe `as_data.frame()` function:
+
+```{r}
+as_data.frame <- function(...) as.data.frame(..., stringsAsFactors = FALSE)
+```
+
+A `left_join()` by `PatientNo`:
+
+```{r}
+leftjoin <- function(...) dplyr::left_join(..., by = "PatientNo")
+```
+
 
 ## 1. Reading and putting the data in shape
 
@@ -119,7 +131,7 @@ Reading all the sheets of this file and transforming the dates:
 ```{r warning = FALSE}
 data <- sheets %>%
   lapply(readxl::read_excel, path = data_file) %>% 
-  lapply(function(x) dplyr::mutate_if(x, function(y) "POSIXct" %in% class(y), as.Date)) %>% 
+  lapply(function(x) mutate_if(x, function(y) "POSIXct" %in% class(y), as.Date)) %>% 
   setNames(sheets)
 ```
 
@@ -291,7 +303,8 @@ data$MICBLD %>%
   filter(OrganismsNo > 0) %>% 
   arrange(HAIDate) %>% 
   filter(PatientNo == "020-526") %>% 
-  add_episode()
+  add_episode() %>% 
+  select(-starts_with("Is"))
 ```
 
 Let's add it to the whole data set:
@@ -367,7 +380,7 @@ clbsi_risk <- data$DAILY1n2 %>%
 Patients with CLBSI
 
 ```{r}
-clbsi <- left_join(first_bsi, data$DAILY1n2, "PatientNo") %>% 
+clbsi <- leftjoin(first_bsi, data$DAILY1n2) %>% 
   filter(first_BSI - VSDate < 6, CVCCount > 0) %>% 
   group_by(PatientNo) %>% 
   summarise(CLBSI = ifelse(length(VSDate) > 1, any(diff(VSDate) < 2), FALSE))
@@ -385,7 +398,7 @@ albsi_risk <- data$DAILY1n2 %>%
 Patients with ALBSI:
 
 ```{r}
-albsi <- left_join(first_bsi, data$DAILY1n2, "PatientNo") %>% 
+albsi <- leftjoin(first_bsi, data$DAILY1n2) %>% 
   filter(first_BSI - VSDate < 6, Arterial) %>% 
   group_by(PatientNo) %>% 
   summarise(ALBSI = ifelse(length(VSDate) > 1, any(diff(VSDate) < 2), FALSE))
@@ -394,7 +407,7 @@ albsi <- left_join(first_bsi, data$DAILY1n2, "PatientNo") %>%
 Total number of Central line days:
 
 ```{r}
-nb_cl_days <- left_join(data$DAILY1n2, first_bsi, "PatientNo") %>% 
+nb_cl_days <- leftjoin(data$DAILY1n2, first_bsi) %>% 
   filter(is.na(first_BSI) | VSDate < first_BSI, CVCCount > 0) %>% 
   group_by(PatientNo) %>% 
   tally() %>%
@@ -404,7 +417,7 @@ nb_cl_days <- left_join(data$DAILY1n2, first_bsi, "PatientNo") %>%
 Total number of arterial line days:
 
 ```{r}
-nb_al_days <- left_join(data$DAILY1n2, first_bsi, "PatientNo") %>% 
+nb_al_days <- leftjoin(data$DAILY1n2, first_bsi) %>% 
   filter(is.na(first_BSI) | VSDate < first_BSI, Arterial) %>% 
   group_by(PatientNo) %>% 
   tally() %>% 
@@ -420,7 +433,7 @@ variable that is calculated here.
 data2 <- c(data[setdiff(names(data), c("DAILY1n2", "MICBLD"))],
            list(first_bsi, clbsi_risk, clbsi, albsi_risk, albsi, nb_cl_days,
                 nb_al_days, nb_bsi, nb_path_bsi1, had_catheter, had_arterial)) %>% 
-  reduce(left_join, by = "PatientNo") %>% 
+  reduce(leftjoin) %>% 
   mutate_at(c("CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI", "had_catheter", "had_arterial"),
             replace_na, FALSE) %>% 
   mutate_at(c("nb_cl_days", "nb_al_days", "nb_bsi"), replace_na, 0) %>% 
@@ -520,7 +533,7 @@ charlson2 <- charlson %>%
 Let's add to `data2`:
 
 ```{r}
-data2 %<>% left_join(charlson2, "PatientNo")
+data2 %<>% leftjoin(charlson2)
 ```
 
 ### Adding APACHE-II scores
@@ -606,7 +619,7 @@ Computing and adding the apache scores to `data2`:
 
 ```{r}
 apache <- data$APAC %>% 
-  left_join(select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency), "PatientNo") %>% 
+  leftjoin(select(data2, PatientNo, age, RandDate, Mode, CongIV, Seve, AIDS, Elective, Emergency)) %>% 
   left_join(select(data$DAILY1n2, PatientNo, VSDate, TempMax, TempMin), c("PatientNo", "RandDate" = "VSDate")) %>% 
   mutate(a = score_fcts$temp(TempMax),
          b = score_fcts$temp(TempMin),
@@ -680,12 +693,13 @@ trinh <- apache_trinh %>%
 
 trinh[] <- lapply(trinh, function(x) {x[which(is.infinite(x))] <- 0; x})
 
-#any(! unlist(map2(marc, trinh, identical)))
 unlist(map2(marc, trinh, identical))
 ```
 
+Let's add the APACHE-II scores from Trinh:
+
 ```{r}
-data2 %<>% left_join(select(apache_trinh, PatientNo, total_score) %>% rename(apache = total_score), "PatientNo")
+data2 %<>% leftjoin(select(apache_trinh, PatientNo, total_score) %>% rename(apache = total_score))
 ```
 
 ### Adding mortalities from Trinh
@@ -695,9 +709,9 @@ data2 <- readRDS("death_day.full.rds") %>%
   mutate(death28 = Event > 0  & DOD < 29,
          death90 = Event > 0  & DOD < 91) %>%
   select(PatientNo, death28, death90, DOD) %>% 
-  left_join(select(readRDS("icu_mortality.full.rds"), -IsTetanus), "PatientNo") %>% 
+  leftjoin(select(readRDS("icu_mortality.full.rds"), -IsTetanus)) %>% 
   rename(deathICU = IsDeath) %>% 
-  left_join(data2, ., "PatientNo") %>% 
+  leftjoin(data2, .) %>% 
   mutate(VARI = as.character(VARI) == "VARI")
 ```
 
@@ -707,7 +721,7 @@ too.
 ```{r}
 data2 <- readRDS("protocol.VARI.rds") %>% 
   select(PatientNo, VAP, VAT) %>% 
-  left_join(data2, ., "PatientNo") %>% 
+  leftjoin(data2, .) %>% 
   mutate_at(vars(VAP, VAT), replace_na, FALSE)
 ```
 
@@ -761,10 +775,6 @@ excel [here](https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv).
 ### Utilitary functions
 
 ```{r}
-groups <- c("habsi_risk", "habsi", "CLBSI_risk", "CLBSI", "ALBSI_risk", "ALBSI", "Tetanus", "death at ICU discharge", "death at hospital discharge")
-```
-
-```{r}
 remove_boolean <- function(x) {
   sel <- which(x[, 1] == "- TRUE")
   x[sel - 2, c(3, 5, 7)] <- x[sel, c(3, 5, 7)]
@@ -794,7 +804,7 @@ patient_day <- function(g, v, df) {
     unlist() %>% 
     rev(.) %>% 
     c(sum(.)) %>% 
-    `[<-`(c("patient-day", rep("", 6)), c(2, 4, 6), .)
+    inset(c("patient-day", rep("", 6)), c(2, 4, 6), .)
 }
 ```
 
@@ -820,8 +830,8 @@ day_per_patient <- function(g, v, data) {
     unlist() %>% 
     rev(.) %>% 
     c(mean_ci(unlist(select(data, {{ v }})))) %>% 
-    `[<-`(c("day/patient", rep("", 6)), c(3, 5, 7), .) %>% 
-    `[<-`(c(2, 4, 6), group_by(data, {{ g }}) %>%
+    inset(c("day/patient", rep("", 6)), c(3, 5, 7), .) %>% 
+    inset(c(2, 4, 6), group_by(data, {{ g }}) %>%
                         tally() %>%
                         pull() %>%
                         rev() %>% 
@@ -859,14 +869,14 @@ make_table_1 <- function(x) {
                        had_catheter + nb_cl_days + had_arterial + nb_al_days +
                        habsi + deathICU + death28 + death90 ~ new_x,
                      data = ., pooledGroup = TRUE, digits = 1, flextable = FALSE) %>% 
-    `$`("table") %>%
-    as.data.frame(stringsAsFactors = FALSE) %>%
+    use_series("table") %>%
+    as_data.frame() %>%
     remove_boolean() %>%
     add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>%
     assign("tmp", ., 1) %>%
     tail(., nrow(.) - 2) %>%
     mutate(V1 = sub("-", "-   -", V1)) %>%
-    `colnames<-`(tmp[2, ]) %>%
+    set_colnames(tmp[2, ]) %>%
     as.matrix %>%
     rbind(reduce(list(patient_day(new_x, rand2icu, data2),
                       patient_day(new_x, rand2hos, data2),
@@ -877,7 +887,7 @@ make_table_1 <- function(x) {
             as_tibble() %>% # to be able to use mutate()
             mutate(V1 = c("rand2icu pd", "rand2hos pd", "nb_cl pd", "nb_al pd", "nb_cl pp", "nb_al pp")) %>%
             as.matrix()) %>% # to be able to use rbind() (because column names do not match)
-    as.data.frame(stringsAsFactors = FALSE)
+    as_data.frame()
 }
 ```
 
@@ -1453,9 +1463,8 @@ The following function generates 1 row of the final table:
 
 ```{r}
 make1row <- function(x) {
-    map(list(habsi_rate, habsi_prop, nb_cl_days_fct, cl_utilization_ratio, clbsi_rate),
-        function(f) f(x)) %>%
-    as.data.frame(stringsAsFactors = FALSE) %>% 
+    map(list(habsi_rate, habsi_prop, nb_cl_days_fct, cl_utilization_ratio, clbsi_rate), function(f) f(x)) %>%
+    as_data.frame() %>% 
     unname()
 }
 ```
@@ -1500,7 +1509,7 @@ Let's compute the statistics for all the groups:
 
 ```{r}
 out <- map(groups, make1group) %>% 
-  c(list(as.data.frame(c("all", make1row(data2)), stringsAsFactors = FALSE)), .) %>% 
+  c(list(as_data.frame(c("all", make1row(data2)))), .) %>% 
   lapply(setNames, col_names) %>% 
   lapply(mutate_at, 1, as.character)
 ```
@@ -1512,7 +1521,7 @@ inter <- lapply(groups, function(x) {
                           x %>%
                             c(rep("", 5)) %>% 
                             t() %>% 
-                            as.data.frame(stringsAsFactors = FALSE) %>% 
+                            as_data.frame() %>% 
                             setNames(col_names)
                         })
 ```
@@ -1711,7 +1720,7 @@ risk_factors <- function(event, time, digit1 = 1, digits = 3) {
 # Putting together:
   cbind(vars, levels, numbers, calc_uni_single(cox_coef),
         calc_uni_single(cox_p1), p_uni2, c_multi, p_multi1, p_multi2) %>%
-    as.data.frame(stringsAsFactors = FALSE) %>% 
+    as_data.frame() %>% 
     remove_rownames() %>% 
     setNames(c("variables", "levels", "non event", "event", "rate ratio uni",
                "p level 1", "p variable 1", "rate ratio multi", "p level 2", "p variable 2 "))
@@ -1833,8 +1842,7 @@ plotevent <- function(a, ylim = 0:1, col_line = "black", col_area = "grey", add 
     map2(tmp, ~ .x(.y, sel)) %>% 
     setNames(snames) %>%
     with({
-      if (! add)
-        plot(time, 1 - surv, xlab = "time (days)", ylab = "proportion dead", ylim = ylim, type = "n")
+      if (! add) plot(time, 1 - surv, xlab = "time (days)", ylab = "proportion dead", ylim = ylim, type = "n")
       polygon(c(time, rev(time)), 1 - c(lower, rev(upper)), col = col_area, border = NA)
       lines(time, 1 - surv, col = col_line)
     })
@@ -1862,8 +1870,7 @@ Graph parameters:
 colors <- c("#e41a1c", "#377eb8")
 adjcol <- adjustcolor(colors, .5)
 add_legend <- function() {
-  legend("topleft", legend = c("HA BSI", "non HA BSI"),
-         fill = adjcol, col = colors, lty = 1, bty = "n", border = NA)
+  legend("topleft", legend = c("HA BSI", "non HA BSI"), fill = adjcol, col = colors, lty = 1, bty = "n", border = NA)
 }
 ```
 
@@ -1898,8 +1905,7 @@ colors <- c("#377eb8", "#984ea3", "#ff7f00")
 adjcol <- adjustcolor(colors, .5)
 ylim <- c(0, .7)
 add_legend <- function() {
-  legend("topleft", legend = c("non HA BSI", "CLBSI", "non CL BSI"),
-         fill = adjcol, col = colors, lty = 1, bty = "n", border = NA)
+  legend("topleft", legend = c("non HA BSI", "CLBSI", "non CL BSI"), fill = adjcol, col = colors, lty = 1, bty = "n", border = NA)
 }
 ```
 
