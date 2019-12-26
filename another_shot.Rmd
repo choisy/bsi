@@ -1740,7 +1740,7 @@ Here are the variables we need:
 
 ```{r}
 data3 <- data2 %>% 
-  select(habsi, DOD, rand2hos, deathICU, death28, death90) %>% 
+  select(habsi, DOD, rand2hos, deathICU, death28, death90, CLBSI) %>% 
   mutate(timeICU = as.integer(rand2hos),
          time28  = ifelse(DOD < 29, DOD, 28),
          time90  = DOD) %>% 
@@ -1761,6 +1761,20 @@ The distributions of events as functions of HA BSI:
 with(data3, table(habsi, deathICU))
 with(data3, table(habsi, death28))
 with(data3, table(habsi, death90))
+```
+
+The distributions of events as functions of CL BSI:
+
+```{r}
+with(data3, table(CLBSI, deathICU))
+with(data3, table(CLBSI, death28))
+with(data3, table(CLBSI, death90))
+```
+
+And the relationship between HA BSI and CL BSI:
+
+```{r}
+with(data3, table(CLBSI, habsi))
 ```
 
 ### Utilitary functions
@@ -1821,7 +1835,6 @@ plotevent <- function(a, ylim = 0:1, col_line = "black", col_area = "grey", add 
     with({
       if (! add)
         plot(time, 1 - surv, xlab = "time (days)", ylab = "proportion dead", ylim = ylim, type = "n")
-
       polygon(c(time, rev(time)), 1 - c(lower, rev(upper)), col = col_area, border = NA)
       lines(time, 1 - surv, col = col_line)
     })
@@ -1857,7 +1870,7 @@ add_legend <- function() {
 Death at ICU:
 
 ```{r}
-plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3, habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3,   habsi)), ylim, colors[1], adjcol[1])
 plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3, ! habsi)), ylim, colors[2], adjcol[2], add = TRUE)
 add_legend()
 ```
@@ -1865,7 +1878,7 @@ add_legend()
 Death at day 28:
 
 ```{r}
-plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3, habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3,   habsi)), ylim, colors[1], adjcol[1])
 plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3, ! habsi)), ylim, colors[2], adjcol[2], add = TRUE)
 add_legend()
 ```
@@ -1873,13 +1886,47 @@ add_legend()
 Death at day 90:
 
 ```{r}
-plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3,   habsi)), ylim, colors[1], adjcol[1])
 plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, ! habsi)), ylim, colors[2], adjcol[2], add = TRUE)
 add_legend()
 ```
 
 ### Events occurences as functions of time and type of BSI status
 
+```{r}
+colors <- c("#377eb8", "#984ea3", "#ff7f00")
+adjcol <- adjustcolor(colors, .5)
+ylim <- c(0, .7)
+add_legend <- function() {
+  legend("topleft", legend = c("non HA BSI", "CLBSI", "non CL BSI"),
+         fill = adjcol, col = colors, lty = 1, bty = "n", border = NA)
+}
+```
+
 Death at ICU:
+
+```{r}
+plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3, ! habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3,   CLBSI)), ylim, colors[2], adjcol[2], add = TRUE)
+plotevent(survfit(Surv(timeICU, deathICU) ~ 1, data = filter(data3, ! CLBSI)), ylim, colors[3], adjcol[3], add = TRUE)
+add_legend()
+```
+
 Death at day 28:
+
+```{r}
+plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3, ! habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3,   CLBSI)), ylim, colors[2], adjcol[2], add = TRUE)
+plotevent(survfit(Surv(time28, death28) ~ 1, data = filter(data3, ! CLBSI)), ylim, colors[3], adjcol[3], add = TRUE)
+add_legend()
+```
+
 Death at day 90:
+
+```{r}
+plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, ! habsi)), ylim, colors[1], adjcol[1])
+plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3,   CLBSI)), ylim, colors[2], adjcol[2], add = TRUE)
+plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, ! CLBSI)), ylim, colors[3], adjcol[3], add = TRUE)
+add_legend()
+```
+
