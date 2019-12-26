@@ -57,7 +57,8 @@ options(width = 260)
 Installing the required packages from CRAN:
 
 ```{r}
-required <- c("car", "dplyr", "lubridate", "magrittr", "purrr", "readxl", "stringr", "survival", "tibble", "tidyr")
+required <- c("car", "dplyr", "lubridate", "magrittr", "purrr", "readxl",
+              "stringr", "survival", "tibble", "tidyr", "writexl")
 installed <- row.names(installed.packages())
 to_install <- setdiff(required, installed)
 if (length(to_install)) install.packages(to_install)
@@ -700,25 +701,18 @@ data2 <- readRDS("death_day.full.rds") %>%
   mutate(VARI = as.character(VARI) == "VARI")
 ```
 
-Note that there are 6 missing values in `DOD`.
+Note that there are 6 missing values in `DOD`. Adding `VAT` and `VAP` from Trinh
+too.
 
 ```{r}
-a <- readRDS("protocol.VARI.rds")
+data2 <- readRDS("protocol.VARI.rds") %>% 
+  select(PatientNo, VAP, VAT) %>% 
+  left_join(data2, ., "PatientNo") %>% 
+  mutate_at(vars(VAP, VAT), replace_na, FALSE)
 ```
 
-```{r}
-data2 %>% 
-  select(PatientNo, Tetanus, VARI) %>% 
-  left_join(a, "PatientNo") %>% 
-  mutate(IsTetanus = IsTetanus == "Yes") %>% 
-  filter(is.na(IsTetanus)) %>% 
-  pull(Tetanus) %>% 
-  table()
-#  drop_na() %>% 
-#  mutate(TetComp = Tetanus - IsTetanus, VariComp = VARI.x - VARI.y) %>% 
-#  filter()
-```
-
+Note here that Trinh's data have 521 observations only. Missing values were
+replaced by `FALSE`.
 
 ### Filtering the data set
 
@@ -742,7 +736,7 @@ data2 %<>%
          CNS, COPD, CVA, Myo, otherpath, dia_co, Mode, rand2icu, rand2hos, adm2icu,
          adm2hos, time2bsi, had_catheter, nb_cl_days, had_arterial, nb_al_days, habsi,
          habsi_risk, CLBSI_risk, CLBSI, ALBSI_risk, ALBSI, DOD, death28, death90, deathICU,
-         VARI, nb_bsi, nb_path_bsi1) %>% 
+         VARI, nb_bsi, nb_path_bsi1, VAT, VAP) %>% 
   mutate_if(is.numeric, as.integer)
 ```
 
@@ -751,6 +745,16 @@ Saving to disk:
 ```{r}
 write.csv(data2, "bsi.csv", quote = FALSE, row.names = FALSE)
 ```
+
+and 
+
+```{r}
+writexl::write_xlsx(data2, "bsi.xlsx")
+```
+
+The data set `data2` used used for all the analyses below in available in CSV 
+[here](https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv) and in
+excel [here](https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv).
 
 ## 2. Derivation of Table 1 on demographics
 
@@ -854,16 +858,16 @@ make_table_1 <- function(x) {
                        dia_co + Mode + rand2icu + rand2hos + adm2icu + adm2hos +
                        had_catheter + nb_cl_days + had_arterial + nb_al_days +
                        habsi + deathICU + death28 + death90 ~ new_x,
-                     data = ., pooledGroup = TRUE, digits = 0, flextable = FALSE) %>% 
-    `$`("table") %>% 
-    as.data.frame(stringsAsFactors = FALSE) %>% 
-    remove_boolean() %>% 
-    add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>% 
-    assign("tmp", ., 1) %>% 
-    tail(., nrow(.) - 2) %>% 
-    mutate(V1 = sub("-", "-   -", V1)) %>% 
+                     data = ., pooledGroup = TRUE, digits = 1, flextable = FALSE) %>% 
+    `$`("table") %>%
+    as.data.frame(stringsAsFactors = FALSE) %>%
+    remove_boolean() %>%
+    add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>%
+    assign("tmp", ., 1) %>%
+    tail(., nrow(.) - 2) %>%
+    mutate(V1 = sub("-", "-   -", V1)) %>%
     `colnames<-`(tmp[2, ]) %>%
-    as.matrix %>% 
+    as.matrix %>%
     rbind(reduce(list(patient_day(new_x, rand2icu, data2),
                       patient_day(new_x, rand2hos, data2),
                       patient_day(new_x, nb_cl_days, data2),
@@ -871,7 +875,7 @@ make_table_1 <- function(x) {
                       day_per_patient(new_x, nb_cl_days, data2),
                       day_per_patient(new_x, nb_al_days, data2)), rbind) %>%
             as_tibble() %>% # to be able to use mutate()
-            mutate(V1 = c("rand2icu pd", "rand2hos pd", "nb_cl pd", "nb_al pd", "nb_cl pp", "nb_al pp")) %>% 
+            mutate(V1 = c("rand2icu pd", "rand2hos pd", "nb_cl pd", "nb_al pd", "nb_cl pp", "nb_al pp")) %>%
             as.matrix()) %>% # to be able to use rbind() (because column names do not match)
     as.data.frame(stringsAsFactors = FALSE)
 }
@@ -883,6 +887,18 @@ Let's generate the tables for VARI:
 
 ```{r}
 make_table_1("VARI")
+```
+
+VAT:
+
+```{r}
+make_table_1("VAT")
+```
+
+VAP:
+
+```{r}
+make_table_1("VAP")
 ```
 
 Risk of HA BSI:
@@ -1200,9 +1216,6 @@ This function extracts the total number of episodes in table `x`:
 
 ```{r}
   getn <- function(x) {
-    # x %>% 
-    #   select(frequency) %>% 
-    #   sum()
     x %>%
       select(nb_episodes) %>%
       first() %>%
@@ -1332,7 +1345,7 @@ calc_prop <- function(x, factor, digits) {
 The following function calculates HA BSI rates, with confidence interval:
 
 ```{r}
-habsi_rate <- function(x, factor = 1000, digits = 3) {
+habsi_rate <- function(x, factor = 1000, digits = 1) {
   x %>% 
     select(habsi, rand2icu) %>% 
     drop_na() %>% 
@@ -1354,7 +1367,7 @@ The following function calculates the proportion of patients with HA BSI, with
 confidence interval:
 
 ```{r}
-habsi_prop <- function(x, factor = 100, digits = 3) {
+habsi_prop <- function(x, factor = 100, digits = 1) {
   x %>% 
     select(habsi) %>% 
     drop_na() %>% 
@@ -1397,7 +1410,7 @@ nb_cl_days_fct(data2)
 The following function calculates the CL utilization ratio:
 
 ```{r}
-cl_utilization_ratio <- function(x, factor = 1000, digits = 3) {
+cl_utilization_ratio <- function(x, factor = 1000, digits = 1) {
   x %>% 
     select(nb_cl_days, rand2icu) %>% 
     drop_na() %>% 
@@ -1418,7 +1431,7 @@ cl_utilization_ratio(data2)
 The following function calculates the CL BSI rate:
 
 ```{r}
-clbsi_rate <- function(x, factor = 1000, digits = 3) {
+clbsi_rate <- function(x, factor = 1000, digits = 1) {
   x %>% 
     select(CLBSI, nb_cl_days) %>% 
     drop_na() %>% 
