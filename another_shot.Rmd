@@ -1522,7 +1522,7 @@ variable with equal amount of data in each category:
 
 ```{r}
 makecat <- function(x, n = 3) {
-  cut(x, quantile(x, seq(0, 1, le = n + 1)), include.lowest = TRUE)
+  cut(x, quantile(x, seq(0, 1, le = n + 1), TRUE), include.lowest = TRUE)
 }
 ```
 
@@ -1562,12 +1562,12 @@ extract_levels_pvalues <- function(x) {
 The following function computes the risk factors table:
 
 ```{r}
-risk_factors <- function(event, time, digit1 = 2, digits = 3) {
+risk_factors <- function(event, time, digit1 = 1, digits = 3) {
 # Making the data:
   data <- data2 %>% 
     select({{event}}, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
            dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, {{time}}) %>% 
-    drop_na() %>% 
+#    drop_na() %>% 
     mutate_at("adm2icu", as.numeric) %>% 
     mutate_at(vars(age, adm2icu, apache), makecat)
 
@@ -1631,25 +1631,25 @@ risk_factors <- function(event, time, digit1 = 2, digits = 3) {
       magrittr::extract(2) %>%
       round(digits)
   }
-
+  
 # The number of levels per variable:
-  nb_lev <- sapply(variables, function(x) length(unique(data[[x]])))
-
+  nb_lev <- sapply(variables, function(x) length(unique(na.exclude(data[[x]]))))
+   
 # The function that adds the blanks:
   add_multiple_blanks <- function(x) {
     blanks <- map(nb_lev - 1, ~ rep("", .x))
     map2(x, blanks, ~ c(.x, .y))
   }
-  
+    
 # The p-values of each variable from univariate models:
   p_uni2 <- variables %>%
     sapply(cox_p2) %>%
      add_multiple_blanks() %>%
      unlist()
-
+  
 # The multivariate model:
   m <- coxph(Surv(data[[time_var]], data[[event_var]]) ~ ., data[, variables])
-
+  
 # The following function splits a data frame by variables, according to the
 # number of levels in each variable:
   split_by_variable <- function(x) {
@@ -1683,22 +1683,16 @@ risk_factors <- function(event, time, digit1 = 2, digits = 3) {
     unlist()
 
 # Levels:
-  levels <- m %>% 
-    summary() %>% 
-    use_series("coefficient") %>% 
-    rownames() %>%
-    split_by_variable() %>%
-    add_single_blanks()
-
   levels <- data[, variables] %>% 
     mutate_all(as.factor) %>%
     lapply(levels) %>%
     unlist()
   
+# variables:
   vars <- variables %>%
     add_multiple_blanks %>%
     unlist()
-  
+
 # Putting together:
   cbind(vars, levels, numbers, calc_uni_single(cox_coef),
         calc_uni_single(cox_p1), p_uni2, c_multi, p_multi1, p_multi2) %>%
