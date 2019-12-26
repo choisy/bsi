@@ -1345,7 +1345,7 @@ calc_prop <- function(x, factor, digits) {
 The following function calculates HA BSI rates, with confidence interval:
 
 ```{r}
-habsi_rate <- function(x, factor = 1000, digits = 1) {
+habsi_rate <- function(x, factor = 1000, digits = 2) {
   x %>% 
     select(habsi, rand2icu) %>% 
     drop_na() %>% 
@@ -1410,7 +1410,7 @@ nb_cl_days_fct(data2)
 The following function calculates the CL utilization ratio:
 
 ```{r}
-cl_utilization_ratio <- function(x, factor = 1000, digits = 1) {
+cl_utilization_ratio <- function(x, factor = 1000, digits = 2) {
   x %>% 
     select(nb_cl_days, rand2icu) %>% 
     drop_na() %>% 
@@ -1431,7 +1431,7 @@ cl_utilization_ratio(data2)
 The following function calculates the CL BSI rate:
 
 ```{r}
-clbsi_rate <- function(x, factor = 1000, digits = 1) {
+clbsi_rate <- function(x, factor = 1000, digits = 2) {
   x %>% 
     select(CLBSI, nb_cl_days) %>% 
     drop_na() %>% 
