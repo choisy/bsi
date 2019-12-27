@@ -55,21 +55,27 @@ options(width = 166) # HTML
 
 ## 0. Packages
 
-Installing the required packages from CRAN:
+Tuning the `install.packages()` function:
 
 ```{r starts here}
+install_packages <- function(...) install.packages(..., repos = "https://cloud.r-project.org", dependencies = TRUE)
+```
+
+Installing the required packages from CRAN:
+
+```{r}
 required <- c("car", "dplyr", "lubridate", "magrittr", "purrr", "readxl",
               "stringr", "survival", "tibble", "tidyr", "writexl")
 installed <- row.names(installed.packages())
 to_install <- setdiff(required, installed)
-if (length(to_install)) install.packages(to_install, repos = "https://cloud.r-project.org")
+if (length(to_install)) install_packages(to_install)
 ```
 
 Plus `C306` from GitHub:
 
 ```{r}
-if (! "C306" %in% installed) {
-  if (! "remotes" %in% installed) install.packages("remotes", repos = "https://cloud.r-project.org")
+if (! require("C306")) {
+  if (! require("remotes")) install_packages("remotes")
   remotes::install_github("lampk/C306")
 }
 ```
@@ -1948,7 +1954,7 @@ sessionInfo()
 
 You can download the R markdown file used to generate this page as so:
 
-```{r ends here, eval = FALSE}
+```{r eval = FALSE}
 download.file("https://raw.githubusercontent.com/choisy/bsi/master/another_shot.Rmd", "bsi_analysis.Rmd")
 ```
 
@@ -1956,15 +1962,15 @@ You can transforme this `bsi_analysis.Rmd` R markdown document in an R script
 named `bsi_analysis.R` as so:
 
 ```{r eval = FALSE}
-if (! require("kintr")) install.packages("knitr", repos = "https://cloud.r-project.org")
+if (! require("kintr")) install_packages("knitr")
 knitr::purl("bsi_analysis.Rmd")
 script <- readLines("bsi_analysis.R")
-writeLines(script[-(seq_len(which(grepl("starts here", script))),
-                    which(grepl("session_info", script)):length(script))],
+writeLines(script[-c(seq_len(which(grepl("starts here", script))[1]),
+                     which(grepl("session_info", script))[1]:length(script))],
            "bsi_analysis.R")
 ```
 
-To execute the code:
+To execute the code (it takes 5-10''):
 
 ```{r eval = FALSE}
 source("bsi_analysis.R")
