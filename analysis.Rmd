@@ -56,11 +56,11 @@ options(width = 166) # HTML
 ## Introduction
 
 The cleaned data sets used in this analysis are avaible in CSV 
-[here](https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv) for the
+[here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/bsi.csv) for the
 patient-based data (`data2`),
-[here](https://raw.githubusercontent.com/choisy/bsi/master/micbld.csv) for the
+[here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/micbld.csv) for the
 blood microbiology data (`data$MICBLD`) and
-[here](https://raw.githubusercontent.com/choisy/bsi/master/daily_icu.csv) for
+[here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/daily_icu.csv) for
 the daily ICU data (`data$DAILY1n2`).
 
 <!--
@@ -148,7 +148,6 @@ library(survival)
 library(flextable)
 library(officer)
 library(C306)
-#library(huxtable)
 ```
 
 ### Utilitary functions
@@ -179,7 +178,7 @@ leftjoin <- function(...) dplyr::left_join(..., by = "PatientNo")
 The data are in this file:
 
 ```{r}
-data_file <- "19-8-2019-CTU16HN_Data.xls.xlsx"
+data_file <- "raw_data/19-8-2019-CTU16HN_Data.xls.xlsx"
 ```
 
 The sheets that we are interested in are the following ones:
@@ -413,7 +412,7 @@ nb_path_bsi1 <- data$MICBLD %>%
 
 Writing `data$MICBLD` to disk:
 
-```{r}
+```{r warning = FALSE}
 dir.create("outputs/CSV", recursive = TRUE)
 write.csv(data$MICBLD, "outputs/CSV/micbld.csv", quote = FALSE, row.names = FALSE)
 ```

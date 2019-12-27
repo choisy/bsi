@@ -444,7 +444,7 @@ title wherever you want to display the reference list.
 </style>
 <div id="introduction" class="section level2">
 <h2>Introduction</h2>
-<p>The cleaned data sets used in this analysis are avaible in CSV <a href="https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv">here</a> for the patient-based data (<code>data2</code>), <a href="https://raw.githubusercontent.com/choisy/bsi/master/micbld.csv">here</a> for the blood microbiology data (<code>data$MICBLD</code>) and <a href="https://raw.githubusercontent.com/choisy/bsi/master/daily_icu.csv">here</a> for the daily ICU data (<code>data$DAILY1n2</code>).</p>
+<p>The cleaned data sets used in this analysis are avaible in CSV <a href="https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/bsi.csv">here</a> for the patient-based data (<code>data2</code>), <a href="https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/micbld.csv">here</a> for the blood microbiology data (<code>data$MICBLD</code>) and <a href="https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/daily_icu.csv">here</a> for the daily ICU data (<code>data$DAILY1n2</code>).</p>
 <!--
 The Excel versions of this
 data sets are available [here]() for the patient-based data (`data2`), [here]()
@@ -494,8 +494,7 @@ library(stringr)
 library(survival)
 library(flextable)
 library(officer)
-library(C306)
-#library(huxtable)</code></pre>
+library(C306)</code></pre>
 <div id="utilitary-functions" class="section level3">
 <h3>Utilitary functions</h3>
 <p>Theh following functions converts a “Yes/No” variable into a boolean variable, dealing with missing values properly:</p>
@@ -511,7 +510,7 @@ library(C306)
 <div id="reading-data" class="section level3">
 <h3>Reading data</h3>
 <p>The data are in this file:</p>
-<pre class="r"><code>data_file &lt;- &quot;19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
+<pre class="r"><code>data_file &lt;- &quot;raw_data/19-8-2019-CTU16HN_Data.xls.xlsx&quot;</code></pre>
 <p>The sheets that we are interested in are the following ones:</p>
 <pre class="r"><code>sheets &lt;- c(&quot;ADM&quot;, &quot;AIR&quot;, &quot;APAC&quot;, &quot;DAILY1n2&quot;, &quot;ENR&quot;, &quot;FINISH&quot;, &quot;FU&quot;, &quot;FU_DAY90&quot;, &quot;MICBLD&quot;)</code></pre>
 <p>Reading all the sheets of this file and transforming the dates:</p>
@@ -664,9 +663,8 @@ library(C306)
   group_by(PatientNo) %&gt;% 
   summarise(nb_path_bsi1 = length(unique(first(strsplit(paste(unlist(pathogens), collapse = &quot;, &quot;), &quot;, &quot;)))))</code></pre>
 <p>Writing <code>data$MICBLD</code> to disk:</p>
-<pre class="r"><code>dir.create(&quot;outputs/CSV&quot;, recursive = TRUE)</code></pre>
-<pre><code>## Warning in dir.create(&quot;outputs/CSV&quot;, recursive = TRUE): &#39;outputs/CSV&#39; existe déjà</code></pre>
-<pre class="r"><code>write.csv(data$MICBLD, &quot;outputs/CSV/micbld.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
+<pre class="r"><code>dir.create(&quot;outputs/CSV&quot;, recursive = TRUE)
+write.csv(data$MICBLD, &quot;outputs/CSV/micbld.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
 <p>and</p>
 <pre class="r"><code>writexl::write_xlsx(data$MICBLD, &quot;outputs/Excel/micbld.xlsx&quot;)</code></pre>
 </div>
