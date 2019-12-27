@@ -63,19 +63,15 @@ blood microbiology data (`data$MICBLD`) and
 [here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/daily_icu.csv) for
 the daily ICU data (`data$DAILY1n2`).
 
-<!--
-The Excel versions of this
-data sets are available [here]() for the patient-based data (`data2`), [here]()
-for the blood microbiology data (`data$MICBLD`) and [here]() for the daily ICU data (`data$DAILY1n2`).
--->
+The Excel versions of this data sets are available 
+[here](https://www.dropbox.com/sh/bvcn6d7sputb6xi/AAAXe8AHjw3tAYI4JTImGc2Ca?dl=0).
+and the outputted tables are available in Word format 
+[here](https://www.dropbox.com/sh/ixthouvjkuzzyfo/AAADe4MKGx_yKPaeeXtan8pga?dl=0).
+The figures can simply be dragged and dropped (in PNG format) directly from this
+HTML document.
 
-<!--
-The outputted tables are available in Word format [here]() and t
--->
-
-The figures can
-simply be dragged and dropped (in PNG format) directly from this HTML document.
-
+The analysis presented here follows
+[this document](https://www.dropbox.com/s/7fe0qkgdz05p4rj/BSI%20analysis%20plan_share.docx?dl=0).
 The code source used to generate this HTML file is 
 [here](https://raw.githubusercontent.com/choisy/bsi/master/analysis.Rmd).
 You can download this R markdown file directly from R as so:

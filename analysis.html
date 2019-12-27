@@ -445,16 +445,8 @@ title wherever you want to display the reference list.
 <div id="introduction" class="section level2">
 <h2>Introduction</h2>
 <p>The cleaned data sets used in this analysis are avaible in CSV <a href="https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/bsi.csv">here</a> for the patient-based data (<code>data2</code>), <a href="https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/micbld.csv">here</a> for the blood microbiology data (<code>data$MICBLD</code>) and <a href="https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/daily_icu.csv">here</a> for the daily ICU data (<code>data$DAILY1n2</code>).</p>
-<!--
-The Excel versions of this
-data sets are available [here]() for the patient-based data (`data2`), [here]()
-for the blood microbiology data (`data$MICBLD`) and [here]() for the daily ICU data (`data$DAILY1n2`).
--->
-<!--
-The outputted tables are available in Word format [here]() and t
--->
-<p>The figures can simply be dragged and dropped (in PNG format) directly from this HTML document.</p>
-<p>The code source used to generate this HTML file is <a href="https://raw.githubusercontent.com/choisy/bsi/master/analysis.Rmd">here</a>. You can download this R markdown file directly from R as so:</p>
+<p>The Excel versions of this data sets are available <a href="https://www.dropbox.com/sh/bvcn6d7sputb6xi/AAAXe8AHjw3tAYI4JTImGc2Ca?dl=0">here</a>. and the outputted tables are available in Word format <a href="https://www.dropbox.com/sh/ixthouvjkuzzyfo/AAADe4MKGx_yKPaeeXtan8pga?dl=0">here</a>. The figures can simply be dragged and dropped (in PNG format) directly from this HTML document.</p>
+<p>The analysis presented here follows <a href="https://www.dropbox.com/s/7fe0qkgdz05p4rj/BSI%20analysis%20plan_share.docx?dl=0">this document</a>. The code source used to generate this HTML file is <a href="https://raw.githubusercontent.com/choisy/bsi/master/analysis.Rmd">here</a>. You can download this R markdown file directly from R as so:</p>
 <pre class="r"><code>download.file(&quot;https://raw.githubusercontent.com/choisy/bsi/master/analysis.Rmd&quot;, &quot;bsi_analysis.Rmd&quot;)</code></pre>
 <p>You can transforme this <code>bsi_analysis.Rmd</code> R markdown document in an R script named <code>bsi_analysis.R</code> as so:</p>
 <pre class="r"><code>if (! require(&quot;kintr&quot;)) install.packages(&quot;knitr&quot;, repos = &quot;https://cloud.r-project.org&quot;, dependencies = TRUE)
