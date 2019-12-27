@@ -64,8 +64,8 @@ install_packages <- function(...) install.packages(..., repos = "https://cloud.r
 Installing the required packages from CRAN:
 
 ```{r}
-required <- c("car", "dplyr", "lubridate", "magrittr", "purrr", "readxl",
-              "stringr", "survival", "tibble", "tidyr", "writexl")
+required <- c("car", "dplyr", "flextable", "lubridate", "magrittr", "officer",
+              "purrr", "readxl", "stringr", "survival", "tibble", "tidyr", "writexl")
 installed <- row.names(installed.packages())
 to_install <- setdiff(required, installed)
 if (length(to_install)) install_packages(to_install)
@@ -883,7 +883,6 @@ make_table_1 <- function(x) {
     add_cause_admission(c("Tetanus", "Pneumonia", "sepsis", "CNS", "COPD", "CVA", "Myo", "otherpath")) %>%
     assign("tmp", ., 1) %>%
     tail(., nrow(.) - 2) %>%
-    mutate(V1 = sub("-", "-   -", V1)) %>%
     set_colnames(tmp[2, ]) %>%
     as.matrix %>%
     rbind(reduce(list(patient_day(new_x, rand2icu, data2),
@@ -895,79 +894,86 @@ make_table_1 <- function(x) {
             as_tibble() %>% # to be able to use mutate()
             mutate(V1 = c("rand2icu pd", "rand2hos pd", "nb_cl pd", "nb_al pd", "nb_cl pp", "nb_al pp")) %>%
             as.matrix()) %>% # to be able to use rbind() (because column names do not match)
-    as_data.frame()
+    as_data.frame() %>% 
+    set_colnames(c("characteristic",
+                   paste(c(rep(trimws(paste(c("non", ""), x)), each = 2),
+                           rep("all", 2)), rep(c("n", "summary statistics"), 3)))) %>% 
+    select(1, 4, 5, 2, 3, 6, 7)
+}
+```
+
+### Writing to Word
+
+The following function takes an output of `make_table_1()` and writes it to
+Word:
+
+```{r}
+flex2word <- function(x, file_name = "example.docx", pad = 20, fs = 5) {
+  require(flextable)
+  require(officer)
+
+  doc <- read_docx()
+  
+  pad_loc <- x %>% 
+    pull(characteristic) %>% 
+    grepl("^-", .) %>% 
+    which()
+  
+  col_keys <- letters[seq_len(length(x))]
+  column_names <- names(x)
+  
+  header2 <- column_names %>% 
+    str_replace("VARI ", "") %>% 
+    str_replace("non ", "") %>% 
+    str_replace("all ", "") %>% 
+    inset(1, "") %>% 
+    setNames(col_keys) %>% 
+    as.list()
+  
+  header1 <- column_names %>% 
+    str_replace(" n$", "") %>% 
+    str_replace(" summary statistics$", "") %>% 
+    setNames(col_keys) %>% 
+    as.list()
+  
+  x %>% 
+    set_colnames(col_keys) %>% 
+    flextable(c(col_keys, LETTERS[1:3])[c(1, 8, 2:3, 9, 4:5, 10, 6:7)]) %>% 
+    delete_part() %>% 
+    add_header(values = header2) %>% 
+    add_header(values = header1) %>% 
+    merge_h(1, part = "header") %>% 
+    align(NULL, 1, "left") %>% 
+    align(1, NULL, "center", "header") %>% 
+    align(2, NULL, "center", "header") %>% 
+    hline_top(border = fp_border(width = 1.5), part = "header") %>% 
+    hline_bottom(border = fp_border(), part = "header") %>% 
+    hline(1, 3:4 , fp_border(), "header") %>% 
+    hline(1, 6:7 , fp_border(), "header") %>% 
+    hline(1, 9:10, fp_border(), "header") %>% 
+    padding(pad_loc, 1, padding.left = pad) %>% 
+    fontsize(size = fs, part = "all") %>% 
+    autofit() %>% 
+    body_add_flextable(doc, .) %>% 
+    print(target = file_name)
 }
 ```
 
 ### The tables
 
-Let's generate the tables for VARI:
+Let's generate of the demographics tables:
 
-```{r}
-make_table_1("VARI")
+```{r warning = FALSE, message = FALSE}
+for (i in c("VARI", "VAT", "VAP", "habsi_risk", "habsi", "ALBSI_risk", "ALBSI",
+            "CLBSI_risk", "CLBSI", "Tetanus", "deathICU")) {
+  cat(paste("\n********** DEMOGRAPHICS FOR", i, "**********\n\n"))
+  make_table_1(i) %>% 
+    print() %>% 
+    flex2word(paste0("Table1", i, ".docx"))
+}
 ```
 
-VAT:
-
-```{r}
-make_table_1("VAT")
-```
-
-VAP:
-
-```{r}
-make_table_1("VAP")
-```
-
-Risk of HA BSI:
-
-```{r}
-make_table_1("habsi_risk")
-```
-
-HA BSI:
-
-```{r}
-make_table_1("habsi")
-```
-
-Risk of AL BSI:
-
-```{r}
-make_table_1("ALBSI_risk")
-```
-
-AL BSI:
-
-```{r}
-make_table_1("ALBSI")
-```
-
-Risk of CL BSI:
-
-```{r}
-make_table_1("CLBSI_risk")
-```
-
-CL BSI:
-
-```{r}
-make_table_1("CLBSI")
-```
-
-Tetanus
-
-```{r}
-make_table_1("Tetanus")
-```
-
-Death at ICU discharge:
-
-```{r}
-make_table_1("deathICU")
-```
-
-```{r include = FALSE}
+```{r huxtable, include = FALSE}
 #  as_hux(add_rownames = FALSE, add_colnames = TRUE) %>% 
 #  insert_row(c(unname(unlist(tmp[1, 2:ncol(tmp)])), "")) %>%
 #  add_footnote("- n = number of patients included in that summary statistic.", border = 0) %>%
@@ -1040,21 +1046,6 @@ data$MICBLD %>%
 ## 4. Derivation of Frequency of BSI aetiology
 
 This function makes a table of pathogens' frequencies and proportions:
-
-```{r include = FALSE, eval = FALSE}
-make_path_table <- function(x) { 
-  x %>% 
-    pull(pathogens) %>% 
-    strsplit(", ") %>%
-    unlist() %>% 
-    table() %>% 
-    sort(TRUE) %>% 
-    as.list() %>% 
-    as_tibble() %>% 
-    pivot_longer(everything(), names_to = "bacteria", values_to = "frequency") %>% 
-    mutate(proportion = frequency / sum(.$frequency))
-}
-```
 
 ```{r}
 make_path_table <- function(x) {
