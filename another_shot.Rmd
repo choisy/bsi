@@ -414,7 +414,14 @@ nb_path_bsi1 <- data$MICBLD %>%
 Writing `data$MICBLD` to disk:
 
 ```{r}
-write.csv(data$MICBLD, "micbld.csv", quote = FALSE, row.names = FALSE)
+dir.create("outputs/CSV", recursive = TRUE)
+write.csv(data$MICBLD, "outputs/CSV/micbld.csv", quote = FALSE, row.names = FALSE)
+```
+
+and 
+
+```{r}
+writexl::write_xlsx(data$MICBLD, "outputs/Excel/micbld.xlsx")
 ```
 
 ### Daily monitoring variables (DAILY1n2)
@@ -495,7 +502,13 @@ nb_al_days <- leftjoin(data$DAILY1n2, first_bsi) %>%
 Writing `data$DAILY1n2` to disk:
 
 ```{r}
-write.csv(data$DAILY1n2, "daily_icu.csv", quote = FALSE, row.names = FALSE)
+write.csv(data$DAILY1n2, "outputs/CSV/daily_icu.csv", quote = FALSE, row.names = FALSE)
+```
+
+and 
+
+```{r}
+writexl::write_xlsx(data$DAILY1n2, "outputs/Excel/daily_icu.xlsx")
 ```
 
 ### Other variables
@@ -580,7 +593,7 @@ charlson <- data2 %>%
 Let's compare with Thinh:
 
 ```{r}
-charlson_trinh <- readRDS("charlson_score.rds")
+charlson_trinh <- readRDS("Trinh_data/charlson_score.rds")
 
 setdiff(charlson$PatientNo, charlson_trinh$PatientNo)
 setdiff(charlson_trinh$PatientNo, charlson$PatientNo)
@@ -751,7 +764,7 @@ apache <- data$APAC %>%
 Let's compare with Trinh:
 
 ```{r}
-apache_trinh <- readRDS("apache.ii_score.rds") %>% 
+apache_trinh <- readRDS("Trinh_data/apache.ii_score.rds") %>% 
   mutate_if(is.factor, as.character)
 
 setdiff(apache$PatientNo, apache_trinh$PatientNo)
@@ -779,11 +792,11 @@ data2 %<>% leftjoin(select(apache_trinh, PatientNo, total_score) %>% rename(apac
 ### Adding mortalities from Trinh
 
 ```{r}
-data2 <- readRDS("death_day.full.rds") %>% 
+data2 <- readRDS("Trinh_data/death_day.full.rds") %>% 
   mutate(death28 = Event > 0  & DOD < 29,
          death90 = Event > 0  & DOD < 91) %>%
   select(PatientNo, death28, death90, DOD) %>% 
-  leftjoin(select(readRDS("icu_mortality.full.rds"), -IsTetanus)) %>% 
+  leftjoin(select(readRDS("Trinh_data/icu_mortality.full.rds"), -IsTetanus)) %>% 
   rename(deathICU = IsDeath) %>% 
   leftjoin(data2, .) %>% 
   mutate(VARI = as.character(VARI) == "VARI")
@@ -793,7 +806,7 @@ Note that there are 6 missing values in `DOD`. Adding `VAT` and `VAP` from Trinh
 too.
 
 ```{r}
-data2 <- readRDS("protocol.VARI.rds") %>% 
+data2 <- readRDS("Trinh_data/protocol.VARI.rds") %>% 
   select(PatientNo, VAP, VAT) %>% 
   leftjoin(data2, .) %>% 
   mutate_at(vars(VAP, VAT), replace_na, FALSE)
@@ -831,13 +844,13 @@ data2 %<>%
 Saving to disk:
 
 ```{r}
-write.csv(data2, "bsi.csv", quote = FALSE, row.names = FALSE)
+write.csv(data2, "outputs/CSV/bsi.csv", quote = FALSE, row.names = FALSE)
 ```
 
 and 
 
 ```{r}
-writexl::write_xlsx(data2, "bsi.xlsx")
+writexl::write_xlsx(data2, "outputs/Excel/bsi.xlsx")
 ```
 
 The data set `data2` used used for all the analyses below in available in CSV 
@@ -1027,13 +1040,13 @@ flex2word <- function(x, file_name = "example.docx", pad = 20, fs = 5) {
 Let's generate of the demographics tables:
 
 ```{r warning = FALSE, message = FALSE}
-dir.create("Word_tables")
+dir.create("outputs/Word", recursive = TRUE)
 for (i in c("VARI", "VAT", "VAP", "habsi_risk", "habsi", "ALBSI_risk", "ALBSI",
             "CLBSI_risk", "CLBSI", "Tetanus", "deathICU")) {
   cat(paste("\n********** DEMOGRAPHICS FOR", i, "**********\n\n"))
   make_table_1(i) %>% 
     print() %>% 
-    flex2word(paste0("Word_tables/Table1", i, ".docx"))
+    flex2word(paste0("outputs/Word/Table1", i, ".docx"))
 }
 ```
 
@@ -1609,7 +1622,7 @@ tmp %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "Word_tables/BSIincidence_rate.docx")
+  print(target = "outputs/Word/BSIincidence_rate.docx")
 ```
 
 ## 6. Risk factors associated with BSI
@@ -1815,7 +1828,7 @@ risk_factors(habsi, time2bsi) %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "Word_tables/BSI_risk_factors.docx")
+  print(target = "outputs/Word/BSI_risk_factors.docx")
 ```
 
 ## 7. Risk factors associated with mortality
@@ -1831,7 +1844,7 @@ risk_factors(death90, DOD) %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "Word_tables/mortality_risk_factors.docx")
+  print(target = "outputs/Word/mortality_risk_factors.docx")
 ```
 
 ## 8. Kaplan–Meier analysis
