@@ -57,23 +57,25 @@ options(width = 166) # HTML
 
 Installing the required packages from CRAN:
 
-```{r}
+```{r starts here}
 required <- c("car", "dplyr", "lubridate", "magrittr", "purrr", "readxl",
               "stringr", "survival", "tibble", "tidyr", "writexl")
 installed <- row.names(installed.packages())
 to_install <- setdiff(required, installed)
-if (length(to_install)) install.packages(to_install)
+if (length(to_install)) install.packages(to_install, repos = "https://cloud.r-project.org")
 ```
 
 Plus `C306` from GitHub:
 
 ```{r}
 if (! "C306" %in% installed) {
-  if (! "remotes" %in% installed) install.packages("remotes")
+  if (! "remotes" %in% installed) install.packages("remotes", repos = "https://cloud.r-project.org")
   remotes::install_github("lampk/C306")
 }
 ```
 
+Here we've used the version of the commit `ad7fd0a8fbdea3a8d7575191609ad5a85d1cc312`.
+A mirror of this repository exists [here](https://github.com/choisy/C306).
 Loading packages for interactive use:
 
 ```{r, message = FALSE}
@@ -1936,3 +1938,34 @@ plotevent(survfit(Surv(time90, death90) ~ 1, data = filter(data3, ! CLBSI)), yli
 add_legend()
 ```
 
+## Session information
+
+```{r session_info}
+sessionInfo()
+```
+
+## Running the script locally
+
+You can download the R markdown file used to generate this page as so:
+
+```{r ends here, eval = FALSE}
+download.file("https://raw.githubusercontent.com/choisy/bsi/master/another_shot.Rmd", "bsi_analysis.Rmd")
+```
+
+You can transforme this `bsi_analysis.Rmd` R markdown document in an R script
+named `bsi_analysis.R` as so:
+
+```{r eval = FALSE}
+if (! require("kintr")) install.packages("knitr", repos = "https://cloud.r-project.org")
+knitr::purl("bsi_analysis.Rmd")
+script <- readLines("bsi_analysis.R")
+writeLines(script[-(seq_len(which(grepl("starts here", script))),
+                    which(grepl("session_info", script)):length(script))],
+           "bsi_analysis.R")
+```
+
+To execute the code:
+
+```{r eval = FALSE}
+source("bsi_analysis.R")
+```
