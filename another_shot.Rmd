@@ -92,8 +92,10 @@ library(tidyr)
 library(lubridate)
 library(tibble)
 library(stringr)
-library(C306)
 library(survival)
+library(flextable)
+library(officer)
+library(C306)
 #library(huxtable)
 ```
 
@@ -909,9 +911,6 @@ Word:
 
 ```{r}
 flex2word <- function(x, file_name = "example.docx", pad = 20, fs = 5) {
-  require(flextable)
-  require(officer)
-
   doc <- read_docx()
   
   pad_loc <- x %>% 
@@ -1528,10 +1527,24 @@ inter <- lapply(groups, function(x) {
 let's put everything together:
 
 ```{r}
-lapply(1:7, function(x) c(out[x], inter[x])) %>%
+(tmp <- lapply(1:7, function(x) c(out[x], inter[x])) %>%
   unlist(FALSE) %>% 
   c(out[8]) %>% 
-  bind_rows()
+  bind_rows())
+```
+
+Writing to Word:
+
+```{r}
+doc <- read_docx()
+tmp %>% 
+  flextable() %>% 
+  align(NULL, 1, "left") %>% 
+  padding(seq_len(nrow(tmp))[-c(1, 2, seq(6, 21, 3))], 1, padding.left = 20) %>% 
+  fontsize(size = 5, part = "all") %>%
+  autofit() %>% 
+  body_add_flextable(doc, .) %>% 
+  print(target = "BSIincidence_rate.docx")
 ```
 
 ## 6. Risk factors associated with BSI
@@ -1729,7 +1742,15 @@ risk_factors <- function(event, time, digit1 = 1, digits = 3) {
 Let's run it:
 
 ```{r}
-risk_factors(habsi, time2bsi)
+doc <- read_docx()
+risk_factors(habsi, time2bsi) %>% 
+  print() %>% 
+  flextable() %>% 
+  align(NULL, 1, "left") %>% 
+  fontsize(size = 5, part = "all") %>%
+  autofit() %>% 
+  body_add_flextable(doc, .) %>% 
+  print(target = "BSI_risk_factors.docx")
 ```
 
 ## 7. Risk factors associated with mortality
@@ -1737,7 +1758,15 @@ risk_factors(habsi, time2bsi)
 Same function as before, with different event:
 
 ```{r}
-risk_factors(death90, DOD)
+doc <- read_docx()
+risk_factors(death90, DOD) %>% 
+  print() %>% 
+  flextable() %>% 
+  align(NULL, 1, "left") %>% 
+  fontsize(size = 5, part = "all") %>%
+  autofit() %>% 
+  body_add_flextable(doc, .) %>% 
+  print(target = "mortality_risk_factors.docx")
 ```
 
 ## 8. Kaplan–Meier analysis
