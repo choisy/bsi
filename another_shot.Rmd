@@ -53,6 +53,58 @@ knitr::opts_chunk$set(margin = TRUE, #prompt = TRUE, comment = "", collapse = TR
 options(width = 166) # HTML
 ```
 
+## Introduction
+
+The cleaned data sets used in this analysis are avaible in CSV 
+[here](https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv) for the
+patient-based data (`data2`),
+[here](https://raw.githubusercontent.com/choisy/bsi/master/micbld.csv) for the
+blood microbiology data (`data$MICBLD`) and
+[here](https://raw.githubusercontent.com/choisy/bsi/master/daily_icu.csv) for
+the daily ICU data (`data$DAILY1n2`).
+
+<!--
+The Excel versions of this
+data sets are available [here]() for the patient-based data (`data2`), [here]()
+for the blood microbiology data (`data$MICBLD`) and [here]() for the daily ICU data (`data$DAILY1n2`).
+-->
+
+<!--
+The outputted tables are available in Word format [here]() and t
+-->
+
+The figures can
+simply be dragged and dropped (in PNG format) directly from this HTML document.
+
+The code source used to generate this HTML file is 
+[here](https://raw.githubusercontent.com/choisy/bsi/master/another_shot.Rmd).
+You can download this R markdown file directly from R as so:
+
+```{r eval = FALSE}
+download.file("https://raw.githubusercontent.com/choisy/bsi/master/another_shot.Rmd", "bsi_analysis.Rmd")
+```
+
+You can transforme this `bsi_analysis.Rmd` R markdown document in an R script
+named `bsi_analysis.R` as so:
+
+```{r eval = FALSE}
+if (! require("kintr")) install.packages("knitr", repos = "https://cloud.r-project.org", dependencies = TRUE)
+knitr::purl("bsi_analysis.Rmd")
+script <- readLines("bsi_analysis.R")
+writeLines(script[-c(seq_len(which(grepl("starts here", script))[1]),
+                     which(grepl("session_info", script))[1]:length(script))],
+           "bsi_analysis.R")
+```
+
+To execute the code (it takes 5-10''), just type:
+
+```{r eval = FALSE}
+source("bsi_analysis.R")
+```
+
+It will generate this HTML document plus the Word files of the outputed tables.
+The session informations are available at the end of this HTML document.
+
 ## 0. Packages
 
 Tuning the `install.packages()` function:
@@ -359,6 +411,12 @@ nb_path_bsi1 <- data$MICBLD %>%
   summarise(nb_path_bsi1 = length(unique(first(strsplit(paste(unlist(pathogens), collapse = ", "), ", ")))))
 ```
 
+Writing `data$MICBLD` to disk:
+
+```{r}
+write.csv(data$MICBLD, "micbld.csv", quote = FALSE, row.names = FALSE)
+```
+
 ### Daily monitoring variables (DAILY1n2)
 
 Patients with catheter:
@@ -432,6 +490,12 @@ nb_al_days <- leftjoin(data$DAILY1n2, first_bsi) %>%
   group_by(PatientNo) %>% 
   tally() %>% 
   rename(nb_al_days = n)
+```
+
+Writing `data$DAILY1n2` to disk:
+
+```{r}
+write.csv(data$DAILY1n2, "daily_icu.csv", quote = FALSE, row.names = FALSE)
 ```
 
 ### Other variables
@@ -963,12 +1027,13 @@ flex2word <- function(x, file_name = "example.docx", pad = 20, fs = 5) {
 Let's generate of the demographics tables:
 
 ```{r warning = FALSE, message = FALSE}
+dir.create("Word_tables")
 for (i in c("VARI", "VAT", "VAP", "habsi_risk", "habsi", "ALBSI_risk", "ALBSI",
             "CLBSI_risk", "CLBSI", "Tetanus", "deathICU")) {
   cat(paste("\n********** DEMOGRAPHICS FOR", i, "**********\n\n"))
   make_table_1(i) %>% 
     print() %>% 
-    flex2word(paste0("Table1", i, ".docx"))
+    flex2word(paste0("Word_tables/Table1", i, ".docx"))
 }
 ```
 
@@ -1544,7 +1609,7 @@ tmp %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "BSIincidence_rate.docx")
+  print(target = "Word_tables/BSIincidence_rate.docx")
 ```
 
 ## 6. Risk factors associated with BSI
@@ -1750,7 +1815,7 @@ risk_factors(habsi, time2bsi) %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "BSI_risk_factors.docx")
+  print(target = "Word_tables/BSI_risk_factors.docx")
 ```
 
 ## 7. Risk factors associated with mortality
@@ -1766,7 +1831,7 @@ risk_factors(death90, DOD) %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "mortality_risk_factors.docx")
+  print(target = "Word_tables/mortality_risk_factors.docx")
 ```
 
 ## 8. Kaplan–Meier analysis
@@ -1968,30 +2033,4 @@ add_legend()
 
 ```{r session_info}
 sessionInfo()
-```
-
-## Running the script locally
-
-You can download the R markdown file used to generate this page as so:
-
-```{r eval = FALSE}
-download.file("https://raw.githubusercontent.com/choisy/bsi/master/another_shot.Rmd", "bsi_analysis.Rmd")
-```
-
-You can transforme this `bsi_analysis.Rmd` R markdown document in an R script
-named `bsi_analysis.R` as so:
-
-```{r eval = FALSE}
-if (! require("kintr")) install_packages("knitr")
-knitr::purl("bsi_analysis.Rmd")
-script <- readLines("bsi_analysis.R")
-writeLines(script[-c(seq_len(which(grepl("starts here", script))[1]),
-                     which(grepl("session_info", script))[1]:length(script))],
-           "bsi_analysis.R")
-```
-
-To execute the code (it takes 5-10''):
-
-```{r eval = FALSE}
-source("bsi_analysis.R")
 ```
