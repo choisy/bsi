@@ -1665,7 +1665,7 @@ risk_factors <- function(event, time, digit1 = 1, digits = 3) {
 # Making the data:
   data <- data2 %>% 
     select({{event}}, Sex, age, hospital, apache, charlson, sepsis, Tetanus, CNS,
-           dia_co, Mode, had_catheter, had_arterial, tracheostomy, adm2icu, {{time}}) %>% 
+           dia_co, Mode, had_catheter, had_arterial, adm2icu, {{time}}) %>% 
     mutate_at("adm2icu", as.numeric) %>% 
     mutate_at(vars(age, adm2icu, apache), makecat)
 
