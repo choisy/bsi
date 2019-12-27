@@ -56,11 +56,11 @@ options(width = 166) # HTML
 ## Introduction
 
 The cleaned data sets used in this analysis are avaible in CSV 
-[here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/bsi.csv) for the
+[here](https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/bsi.csv) for the
 patient-based data (`data2`),
-[here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/micbld.csv) for the
+[here](https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/micbld.csv) for the
 blood microbiology data (`data$MICBLD`) and
-[here](https://raw.githubusercontent.com/choisy/bsi/master/output/CSV/daily_icu.csv) for
+[here](https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/daily_icu.csv) for
 the daily ICU data (`data$DAILY1n2`).
 
 The Excel versions of this data sets are available 
