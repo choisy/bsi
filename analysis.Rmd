@@ -56,17 +56,17 @@ options(width = 166) # HTML
 ## Introduction
 
 The cleaned data sets used in this analysis are avaible in CSV 
-[here](https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/bsi.csv) for the
+[here](https://raw.githubusercontent.com/choisy/bsi/master/clean_data/CSV/bsi.csv) for the
 patient-based data (`data2`),
-[here](https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/micbld.csv) for the
+[here](https://raw.githubusercontent.com/choisy/bsi/master/clean_data/CSV/micbld.csv) for the
 blood microbiology data (`data$MICBLD`) and
-[here](https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/daily_icu.csv) for
+[here](https://raw.githubusercontent.com/choisy/bsi/master/clean_data/CSV/daily_icu.csv) for
 the daily ICU data (`data$DAILY1n2`).
 
 The Excel versions of this data sets are available 
-[here](https://www.dropbox.com/sh/bvcn6d7sputb6xi/AAAXe8AHjw3tAYI4JTImGc2Ca?dl=0).
+[here](https://www.dropbox.com/sh/lq7dlpfek6t7x5e/AABKWowlibUMCsYqc-JaZQFEa?dl=0).
 and the outputted tables are available in Word format 
-[here](https://www.dropbox.com/sh/ixthouvjkuzzyfo/AAADe4MKGx_yKPaeeXtan8pga?dl=0).
+[here](https://www.dropbox.com/sh/g69zatnfrvgmu9d/AACDg5dMwZgJe8nENaiQelaHa?dl=0).
 The figures can simply be dragged and dropped (in PNG format) directly from this
 HTML document.
 
@@ -409,14 +409,15 @@ nb_path_bsi1 <- data$MICBLD %>%
 Writing `data$MICBLD` to disk:
 
 ```{r warning = FALSE}
-dir.create("outputs/CSV", recursive = TRUE)
-write.csv(data$MICBLD, "outputs/CSV/micbld.csv", quote = FALSE, row.names = FALSE)
+dir.create("clean_data/CSV", recursive = TRUE)
+write.csv(data$MICBLD, "clean_data/CSV/micbld.csv", quote = FALSE, row.names = FALSE)
 ```
 
 and 
 
 ```{r}
-writexl::write_xlsx(data$MICBLD, "outputs/Excel/micbld.xlsx")
+dir.create("clean_data/Excel")
+writexl::write_xlsx(data$MICBLD, "clean_data/Excel/micbld.xlsx")
 ```
 
 ### Daily monitoring variables (DAILY1n2)
@@ -497,13 +498,13 @@ nb_al_days <- leftjoin(data$DAILY1n2, first_bsi) %>%
 Writing `data$DAILY1n2` to disk:
 
 ```{r}
-write.csv(data$DAILY1n2, "outputs/CSV/daily_icu.csv", quote = FALSE, row.names = FALSE)
+write.csv(data$DAILY1n2, "clean_data/CSV/daily_icu.csv", quote = FALSE, row.names = FALSE)
 ```
 
 and 
 
 ```{r}
-writexl::write_xlsx(data$DAILY1n2, "outputs/Excel/daily_icu.xlsx")
+writexl::write_xlsx(data$DAILY1n2, "clean_data/Excel/daily_icu.xlsx")
 ```
 
 ### Other variables
@@ -839,13 +840,13 @@ data2 %<>%
 Saving to disk:
 
 ```{r}
-write.csv(data2, "outputs/CSV/bsi.csv", quote = FALSE, row.names = FALSE)
+write.csv(data2, "clean_data/CSV/bsi.csv", quote = FALSE, row.names = FALSE)
 ```
 
 and 
 
 ```{r}
-writexl::write_xlsx(data2, "outputs/Excel/bsi.xlsx")
+writexl::write_xlsx(data2, "clean_data/Excel/bsi.xlsx")
 ```
 
 The data set `data2` used used for all the analyses below in available in CSV 
@@ -1035,13 +1036,13 @@ flex2word <- function(x, file_name = "example.docx", pad = 20, fs = 5) {
 Let's generate of the demographics tables:
 
 ```{r warning = FALSE, message = FALSE}
-dir.create("outputs/Word", recursive = TRUE)
+dir.create("outputs")
 for (i in c("VARI", "VAT", "VAP", "habsi_risk", "habsi", "ALBSI_risk", "ALBSI",
             "CLBSI_risk", "CLBSI", "Tetanus", "deathICU")) {
   cat(paste("\n********** DEMOGRAPHICS FOR", i, "**********\n\n"))
   make_table_1(i) %>% 
     print() %>% 
-    flex2word(paste0("outputs/Word/Table1", i, ".docx"))
+    flex2word(paste0("outputs/Table1", i, ".docx"))
 }
 ```
 
@@ -1617,7 +1618,7 @@ tmp %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "outputs/Word/BSIincidence_rate.docx")
+  print(target = "outputs/BSIincidence_rate.docx")
 ```
 
 ## 6. Risk factors associated with BSI
@@ -1823,7 +1824,7 @@ risk_factors(habsi, time2bsi) %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "outputs/Word/BSI_risk_factors.docx")
+  print(target = "outputs/BSI_risk_factors.docx")
 ```
 
 ## 7. Risk factors associated with mortality
@@ -1839,7 +1840,7 @@ risk_factors(death90, DOD) %>%
   fontsize(size = 5, part = "all") %>%
   autofit() %>% 
   body_add_flextable(doc, .) %>% 
-  print(target = "outputs/Word/mortality_risk_factors.docx")
+  print(target = "outputs/mortality_risk_factors.docx")
 ```
 
 ## 8. Kaplan–Meier analysis

@@ -444,8 +444,8 @@ title wherever you want to display the reference list.
 </style>
 <div id="introduction" class="section level2">
 <h2>Introduction</h2>
-<p>The cleaned data sets used in this analysis are avaible in CSV <a href="https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/bsi.csv">here</a> for the patient-based data (<code>data2</code>), <a href="https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/micbld.csv">here</a> for the blood microbiology data (<code>data$MICBLD</code>) and <a href="https://raw.githubusercontent.com/choisy/bsi/master/outputs/CSV/daily_icu.csv">here</a> for the daily ICU data (<code>data$DAILY1n2</code>).</p>
-<p>The Excel versions of this data sets are available <a href="https://www.dropbox.com/sh/bvcn6d7sputb6xi/AAAXe8AHjw3tAYI4JTImGc2Ca?dl=0">here</a>. and the outputted tables are available in Word format <a href="https://www.dropbox.com/sh/ixthouvjkuzzyfo/AAADe4MKGx_yKPaeeXtan8pga?dl=0">here</a>. The figures can simply be dragged and dropped (in PNG format) directly from this HTML document.</p>
+<p>The cleaned data sets used in this analysis are avaible in CSV <a href="https://raw.githubusercontent.com/choisy/bsi/master/clean_data/CSV/bsi.csv">here</a> for the patient-based data (<code>data2</code>), <a href="https://raw.githubusercontent.com/choisy/bsi/master/clean_data/CSV/micbld.csv">here</a> for the blood microbiology data (<code>data$MICBLD</code>) and <a href="https://raw.githubusercontent.com/choisy/bsi/master/clean_data/CSV/daily_icu.csv">here</a> for the daily ICU data (<code>data$DAILY1n2</code>).</p>
+<p>The Excel versions of this data sets are available <a href="https://www.dropbox.com/sh/lq7dlpfek6t7x5e/AABKWowlibUMCsYqc-JaZQFEa?dl=0">here</a>. and the outputted tables are available in Word format <a href="https://www.dropbox.com/sh/g69zatnfrvgmu9d/AACDg5dMwZgJe8nENaiQelaHa?dl=0">here</a>. The figures can simply be dragged and dropped (in PNG format) directly from this HTML document.</p>
 <p>The analysis presented here follows <a href="https://www.dropbox.com/s/7fe0qkgdz05p4rj/BSI%20analysis%20plan_share.docx?dl=0">this document</a>. The code source used to generate this HTML file is <a href="https://raw.githubusercontent.com/choisy/bsi/master/analysis.Rmd">here</a>. You can download this R markdown file directly from R as so:</p>
 <pre class="r"><code>download.file(&quot;https://raw.githubusercontent.com/choisy/bsi/master/analysis.Rmd&quot;, &quot;bsi_analysis.Rmd&quot;)</code></pre>
 <p>You can transforme this <code>bsi_analysis.Rmd</code> R markdown document in an R script named <code>bsi_analysis.R</code> as so:</p>
@@ -655,10 +655,12 @@ library(C306)</code></pre>
   group_by(PatientNo) %&gt;% 
   summarise(nb_path_bsi1 = length(unique(first(strsplit(paste(unlist(pathogens), collapse = &quot;, &quot;), &quot;, &quot;)))))</code></pre>
 <p>Writing <code>data$MICBLD</code> to disk:</p>
-<pre class="r"><code>dir.create(&quot;outputs/CSV&quot;, recursive = TRUE)
-write.csv(data$MICBLD, &quot;outputs/CSV/micbld.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
+<pre class="r"><code>dir.create(&quot;clean_data/CSV&quot;, recursive = TRUE)
+write.csv(data$MICBLD, &quot;clean_data/CSV/micbld.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
 <p>and</p>
-<pre class="r"><code>writexl::write_xlsx(data$MICBLD, &quot;outputs/Excel/micbld.xlsx&quot;)</code></pre>
+<pre class="r"><code>dir.create(&quot;clean_data/Excel&quot;)</code></pre>
+<pre><code>## Warning in dir.create(&quot;clean_data/Excel&quot;): &#39;clean_data/Excel&#39; existe déjà</code></pre>
+<pre class="r"><code>writexl::write_xlsx(data$MICBLD, &quot;clean_data/Excel/micbld.xlsx&quot;)</code></pre>
 </div>
 </div>
 <div id="daily-monitoring-variables-daily1n2" class="section level3">
@@ -704,9 +706,9 @@ write.csv(data$MICBLD, &quot;outputs/CSV/micbld.csv&quot;, quote = FALSE, row.na
   tally() %&gt;% 
   rename(nb_al_days = n)</code></pre>
 <p>Writing <code>data$DAILY1n2</code> to disk:</p>
-<pre class="r"><code>write.csv(data$DAILY1n2, &quot;outputs/CSV/daily_icu.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
+<pre class="r"><code>write.csv(data$DAILY1n2, &quot;clean_data/CSV/daily_icu.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
 <p>and</p>
-<pre class="r"><code>writexl::write_xlsx(data$DAILY1n2, &quot;outputs/Excel/daily_icu.xlsx&quot;)</code></pre>
+<pre class="r"><code>writexl::write_xlsx(data$DAILY1n2, &quot;clean_data/Excel/daily_icu.xlsx&quot;)</code></pre>
 </div>
 <div id="other-variables-1" class="section level3">
 <h3>Other variables</h3>
@@ -981,9 +983,9 @@ unlist(map2(marc, trinh, identical))</code></pre>
   mutate_if(is.numeric, as.integer)</code></pre>
 <pre><code>## Warning: NAs introduced by coercion to integer range</code></pre>
 <p>Saving to disk:</p>
-<pre class="r"><code>write.csv(data2, &quot;outputs/CSV/bsi.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
+<pre class="r"><code>write.csv(data2, &quot;clean_data/CSV/bsi.csv&quot;, quote = FALSE, row.names = FALSE)</code></pre>
 <p>and</p>
-<pre class="r"><code>writexl::write_xlsx(data2, &quot;outputs/Excel/bsi.xlsx&quot;)</code></pre>
+<pre class="r"><code>writexl::write_xlsx(data2, &quot;clean_data/Excel/bsi.xlsx&quot;)</code></pre>
 <p>The data set <code>data2</code> used used for all the analyses below in available in CSV <a href="https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv">here</a> and in excel <a href="https://raw.githubusercontent.com/choisy/bsi/master/bsi.csv">here</a>.</p>
 </div>
 </div>
@@ -1128,13 +1130,13 @@ unlist(map2(marc, trinh, identical))</code></pre>
 <div id="the-tables" class="section level3">
 <h3>The tables</h3>
 <p>Let’s generate of the demographics tables:</p>
-<pre class="r"><code>dir.create(&quot;outputs/Word&quot;, recursive = TRUE)
+<pre class="r"><code>dir.create(&quot;outputs&quot;)
 for (i in c(&quot;VARI&quot;, &quot;VAT&quot;, &quot;VAP&quot;, &quot;habsi_risk&quot;, &quot;habsi&quot;, &quot;ALBSI_risk&quot;, &quot;ALBSI&quot;,
             &quot;CLBSI_risk&quot;, &quot;CLBSI&quot;, &quot;Tetanus&quot;, &quot;deathICU&quot;)) {
   cat(paste(&quot;\n********** DEMOGRAPHICS FOR&quot;, i, &quot;**********\n\n&quot;))
   make_table_1(i) %&gt;% 
     print() %&gt;% 
-    flex2word(paste0(&quot;outputs/Word/Table1&quot;, i, &quot;.docx&quot;))
+    flex2word(paste0(&quot;outputs/Table1&quot;, i, &quot;.docx&quot;))
 }</code></pre>
 <pre><code>## 
 ## ********** DEMOGRAPHICS FOR VARI **********
@@ -2210,7 +2212,7 @@ tmp %&gt;%
   fontsize(size = 5, part = &quot;all&quot;) %&gt;%
   autofit() %&gt;% 
   body_add_flextable(doc, .) %&gt;% 
-  print(target = &quot;outputs/Word/BSIincidence_rate.docx&quot;)</code></pre>
+  print(target = &quot;outputs/BSIincidence_rate.docx&quot;)</code></pre>
 </div>
 </div>
 </div>
@@ -2393,7 +2395,7 @@ risk_factors(habsi, time2bsi) %&gt;%
   fontsize(size = 5, part = &quot;all&quot;) %&gt;%
   autofit() %&gt;% 
   body_add_flextable(doc, .) %&gt;% 
-  print(target = &quot;outputs/Word/BSI_risk_factors.docx&quot;)</code></pre>
+  print(target = &quot;outputs/BSI_risk_factors.docx&quot;)</code></pre>
 <pre><code>##       variables   levels    non event      event       rate ratio uni p level 1 p variable 1     rate ratio multi p level 2 p variable 2 
 ## 1           Sex   Female 173 (29.3 %) 10 (1.7 %)                                       0.078                                        0.056
 ## 2                   Male 374 (63.3 %) 34 (5.8 %) 1.838 (0.903, 3.741)     0.093               2.046 (0.95, 4.408)     0.068              
@@ -2440,7 +2442,7 @@ risk_factors(death90, DOD) %&gt;%
   fontsize(size = 5, part = &quot;all&quot;) %&gt;%
   autofit() %&gt;% 
   body_add_flextable(doc, .) %&gt;% 
-  print(target = &quot;outputs/Word/mortality_risk_factors.docx&quot;)</code></pre>
+  print(target = &quot;outputs/mortality_risk_factors.docx&quot;)</code></pre>
 <pre><code>##       variables   levels    non event        event       rate ratio uni p level 1 p variable 1     rate ratio multi p level 2 p variable 2 
 ## 1           Sex   Female 114 (19.3 %)  69 (11.7 %)                                       0.863                                        0.872
 ## 2                   Male 259 (43.8 %) 149 (25.2 %) 0.975 (0.733, 1.297)     0.863              1.028 (0.737, 1.433)     0.872              
